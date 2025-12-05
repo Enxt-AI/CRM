@@ -1,0 +1,448 @@
+// packages/db/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model User {
+  id             String    @id @default(uuid())
+  username       String    @unique // Login identifier
+  passwordHash   String    // BCrypt hashed password
+  fullName       String
+  role           Role      @default(SALES_REP)
+  isActive       Boolean   @default(true)
+  
+  // Security
+  needsPasswordChange Boolean @default(true) // Force change on first login
+  lastLoginAt         DateTime?
+  
+  // Relations
+  leads          Lead[]    @relation("LeadOwner")
+  clients        Client[]  @relation("AccountManager")
+  tasks          Task[]    @relation("TaskAssignee")
+  meetings       Meeting[] @relation("MeetingOrganizer")
+  activities     Activity[] @relation("ActivityCreator")
+  notes          Note[]    @relation("NoteAuthor")
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  
+  @@index([username])
+  @@index([isActive])
+  @@index([role])
+}
+
+enum Role {
+  ADMIN       // Full access, user management, can delete data
+  MANAGER     // View all data, reports, cannot delete users
+  SALES_REP   // View only assigned leads/clients
+}
+
+model Lead {
+  id          String     @id @default(uuid())
+  
+  // Basic Information
+  name        String
+  companyName String?
+  email       String?
+  mobile      String?
+  
+  // Source Tracking
+  source      LeadSource @default(OTHER)
+  sourceDetails String?  // e.g., "LinkedIn Ad Campaign Q4"
+  
+  // KANBAN PIPELINE - For visual board management
+  pipelineStage LeadPipelineStage @default(NEW)
+  
+  // Status & Qualification
+  status      LeadStatus @default(NEW)
+  score       Int        @default(0) // 0-100 scoring system
+  priority    Priority   @default(MEDIUM) // Quick visual priority
+  tags        String[]   // e.g., ["High Priority", "Enterprise", "Hot Lead"]
+  
+  // Ownership
+  ownerId     String
+  owner       User       @relation("LeadOwner", fields: [ownerId], references: [id])
+  
+  // Rich Data
+  documents   Document[] // Contracts, proposals, requirements
+  activities  Activity[] // Communication history + Follow-ups
+  tasks       Task[]     // Follow-up reminders
+  meetings    Meeting[]  // Scheduled meetings
+  notes       Note[]     // Quick text notes ("Prefers email over calls")
+  
+  // Conversion Tracking
+  isConverted       Boolean   @default(false)
+  convertedAt       DateTime?
+  convertedClientId String?   @unique
+  client            Client?   @relation(fields: [convertedClientId], references: [id])
+  
+  // Metadata
+  lastContactedAt DateTime?
+  nextFollowUpAt  DateTime? // Important for "Due Today" dashboard
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  @@index([ownerId, pipelineStage])
+  @@index([ownerId, status])
+  @@index([email])
+  @@index([status])
+  @@index([source])
+  @@index([priority])
+  @@index([nextFollowUpAt]) // For "Due Today" queries
+}
+
+enum LeadSource {
+  WEBSITE
+  LINKEDIN
+  REFERRAL
+  COLD_CALL
+  TRADE_SHOW
+  PARTNER
+  EMAIL_CAMPAIGN
+  OTHER
+}
+
+enum LeadStatus {
+  NEW                // Just added to system
+  ATTEMPTING_CONTACT // Called/emailed but no response
+  CONTACTED          // Made initial contact
+  QUALIFIED          // Meets criteria, interested
+  NURTURING          // Not ready now, follow up later
+  DISQUALIFIED       // Not a fit
+  CONVERTED          // Became a client
+}
+
+// KANBAN BOARD STAGES - Each user sees their own board
+enum LeadPipelineStage {
+  NEW           // Column 1: Newly assigned
+  CONTACTED     // Column 2: Initial contact made
+  QUALIFIED     // Column 3: Needs assessment done
+  PROPOSAL      // Column 4: Proposal stage
+  NEGOTIATION   // Column 5: Discussing terms
+  WON           // Converted to client
+  LOST          // Disqualified/Lost
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Client {
+  id             String       @id @default(uuid())
+  
+  // Company Information
+  companyName    String
+  primaryContact String       // Main person's name
+  email          String?
+  mobile         String?
+  
+  // Business Details
+  industry       String?      // "Technology", "Healthcare", "Finance"
+  domain         String?      // "SaaS", "E-commerce", "Consulting"
+  companySize    String?      // e.g., "1-10", "50-200"
+  gstNumber      String?      // Tax ID
+  address        String?
+  website        String?
+  
+  // External Links
+  googleSheetUrl String?      // Link to Google Sheets tracker
+  notionPageUrl  String?      // Link to Notion workspace
+  slackChannel   String?      // Dedicated Slack channel
+  
+  // Status
+  status         ClientStatus @default(ACTIVE)
+  lifetimeValue  Decimal      @default(0) @db.Decimal(12, 2)
+  
+  // Ownership
+  accountManagerId String
+  accountManager   User       @relation("AccountManager", fields: [accountManagerId], references: [id])
+  
+  // Relations
+  originLead     Lead?        // Which lead converted to this client
+  deals          Deal[]       // Revenue opportunities
+  documents      Document[]
+  activities     Activity[]   // Interaction history
+  tasks          Task[]
+  meetings       Meeting[]    // Scheduled client meetings
+  notes          Note[]       // e.g., "Decision maker is CTO, prefers technical demos"
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  @@index([accountManagerId, status])
+  @@index([status])
+  @@index([industry])
+}
+
+enum ClientStatus {
+  ACTIVE    // Current customer
+  INACTIVE  // No recent activity
+  CHURNED   // Left for competitor
+  PAUSED    // Temporarily not engaged
+}
+
+model Deal {
+  id          String     @id @default(uuid())
+  
+  // Deal Information
+  title       String     // e.g., "Website Redesign Project 2025"
+  description String?    @db.Text
+  
+  // PRICING - Key addition
+  value       Decimal    @db.Decimal(12, 2) // Expected deal value
+  budget      Decimal?   @db.Decimal(12, 2) // Client's budget (if disclosed)
+  currency    String     @default("INR")    // INR, USD, EUR
+  
+  // Industry/Domain Context
+  dealType    String?    // "New Business", "Renewal", "Upsell"
+  industry    String?    // Copied from Client or specific to deal
+  
+  // Pipeline Stage
+  stage       DealStage  @default(DISCOVERY)
+  progress    Int        @default(0) // 0-100 percentage
+  probability Int        @default(50) // Win probability 0-100
+  
+  // Timeline
+  expectedCloseDate DateTime?
+  actualCloseDate   DateTime?
+  
+  // Next Steps (Action Items)
+  nextSteps   String?    @db.Text // "Send proposal by Friday"
+  
+  // Relations
+  clientId    String
+  client      Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  // Audit
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  @@index([clientId, stage])
+  @@index([stage])
+  @@index([expectedCloseDate])
+}
+
+enum DealStage {
+  DISCOVERY      // Understanding needs
+  PROPOSAL_SENT  // Sent formal proposal
+  NEGOTIATION    // Discussing terms/pricing
+  CLOSED_WON     // Successfully closed
+  CLOSED_LOST    // Lost to competitor or budget
+}
+
+// =========================================
+// ACTIVITY TIMELINE (Communication Log + Follow-Ups)
+// =========================================
+
+model Activity {
+  id          String       @id @default(uuid())
+  
+  type        ActivityType
+  title       String       // e.g., "Initial Discovery Call"
+  description String?      @db.Text
+  
+  // Follow-Up Tracking
+  isFollowUp  Boolean      @default(false) // Mark if this is a follow-up action
+  followUpDate DateTime?   // When follow-up happened or is scheduled
+  
+  // Who performed this activity
+  createdById String
+  createdBy   User         @relation("ActivityCreator", fields: [createdById], references: [id])
+  
+  // Related to which entity?
+  leadId      String?
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  clientId    String?
+  client      Client?      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  // Timestamp
+  occurredAt  DateTime     @default(now())
+  createdAt   DateTime     @default(now())
+  
+  @@index([leadId, occurredAt])
+  @@index([clientId, occurredAt])
+  @@index([createdById])
+  @@index([isFollowUp, followUpDate])
+}
+
+enum ActivityType {
+  CALL            // Phone call made/received
+  EMAIL           // Email sent/received
+  MEETING         // In-person or video meeting
+  FOLLOW_UP       // Follow-up action completed
+  NOTE            // Simple note added
+  STATUS_CHANGE   // Lead/Deal status changed
+  DOCUMENT_UPLOAD // File uploaded
+  TASK_COMPLETED  // Task marked done
+  DEAL_CREATED    // New deal created
+  CONVERTED       // Lead converted to client
+}
+
+// =========================================
+// MEETINGS (Reminders & Scheduled Events)
+// =========================================
+
+model Meeting {
+  id          String   @id @default(uuid())
+  
+  title       String   // "Product Demo with John"
+  description String?  @db.Text
+  location    String?  // "Zoom", "Office", "Client Site"
+  meetingUrl  String?  // Zoom/Teams/Meet link
+  
+  // Schedule
+  startTime   DateTime
+  endTime     DateTime
+  
+  // Status
+  status      MeetingStatus @default(SCHEDULED)
+  
+  // Participants
+  organizerId String
+  organizer   User     @relation("MeetingOrganizer", fields: [organizerId], references: [id])
+  
+  // Relations
+  leadId      String?
+  lead        Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  clientId    String?
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  // Reminders
+  reminderSent Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([organizerId, startTime])
+  @@index([startTime, status])
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+// =========================================
+// TASKS (Reminders & To-Dos)
+// =========================================
+
+model Task {
+  id          String     @id @default(uuid())
+  
+  title       String     // "Follow up call with John"
+  description String?    @db.Text
+  priority    Priority   @default(MEDIUM)
+  
+  // Task Type
+  type        TaskType   @default(GENERAL)
+  
+  // Status
+  isCompleted Boolean    @default(false)
+  completedAt DateTime?
+  
+  // Assignment
+  assignedToId String
+  assignedTo   User      @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  
+  // Due Date (Important for "Due Today" dashboard)
+  dueDate     DateTime
+  
+  // Relations
+  leadId      String?
+  lead        Lead?      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  clientId    String?
+  client      Client?    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  @@index([assignedToId, isCompleted])
+  @@index([dueDate, isCompleted]) // Critical for "Due Today" queries
+  @@index([assignedToId, dueDate, isCompleted])
+}
+
+enum TaskType {
+  GENERAL     // Generic task
+  CALL        // Call reminder
+  EMAIL       // Email follow-up
+  FOLLOW_UP   // General follow-up
+  PROPOSAL    // Send proposal
+  CONTRACT    // Contract signing
+}
+
+// =========================================
+// DOCUMENTS (File Storage)
+// =========================================
+
+model Document {
+  id          String   @id @default(uuid())
+  
+  // File Info
+  name        String   // Original filename
+  url         String   // Cloudflare R2 URL or external link
+  fileType    String   // MIME type: "application/pdf" or "link"
+  fileSize    Int?     // Size in bytes (null for links)
+  isLink      Boolean  @default(false) // True if just a URL, false if uploaded file
+  
+  // Categorization
+  category    String?  // "Contract", "Proposal", "NDA", "Requirements"
+  
+  // Relations (one document can belong to lead OR client)
+  leadId      String?
+  lead        Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  clientId    String?
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  // Audit
+  uploadedAt  DateTime @default(now())
+  
+  @@index([leadId])
+  @@index([clientId])
+}
+
+// NOTES (Quick Text Notes)
+// WHERE USED: On Lead/Client detail pages for context like:
+// - "Prefers communication via WhatsApp"
+// - "Decision maker is CTO, budget approval in Q2"
+// - "Mentioned interest in AI features"
+model Note {
+  id        String   @id @default(uuid())
+  
+  content   String   @db.Text
+  isPinned  Boolean  @default(false) // Pin important notes to top
+  
+  // Who wrote it
+  authorId  String
+  author    User     @relation("NoteAuthor", fields: [authorId], references: [id])
+  
+  // Related to? (Lead OR Client)
+  leadId    String?
+  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([leadId, createdAt])
+  @@index([clientId, createdAt])
+  @@index([isPinned])
+}
