@@ -10,22 +10,24 @@ export default function Home() {
   useEffect(() => {
     async function checkAuth() {
       try {
-        // Check if setup is required
+        // Check if setup is required FIRST
         const { setupRequired } = await auth.checkSetup();
         if (setupRequired) {
           router.replace("/setup");
           return;
         }
 
-        // Check if user is authenticated
+        // Only check auth if setup is complete
         try {
           await auth.me();
           router.replace("/dashboard");
         } catch {
           router.replace("/signin");
         }
-      } catch {
-        router.replace("/signin");
+      } catch (error) {
+        // If API is down or setup check fails, 
+        // try to go to setup (it will handle its own errors)
+        router.replace("/setup");
       }
     }
 

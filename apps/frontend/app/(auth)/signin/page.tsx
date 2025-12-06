@@ -19,7 +19,7 @@ import {
 
 export default function SigninPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, login } = useAuth();
   const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -77,10 +77,8 @@ export default function SigninPage() {
 
     setIsSubmitting(true);
     try {
-      await auth.signin({
-        username: formData.username,
-        password: formData.password,
-      });
+      // Use login from AuthContext to update global auth state
+      await login(formData.username, formData.password);
       toast.success("Signed in successfully!");
       router.push("/dashboard");
     } catch (error) {

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { auth, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,7 @@ import {
 
 export default function SetupPage() {
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -99,6 +101,8 @@ export default function SetupPage() {
         username: formData.username,
         password: formData.password,
       });
+      // Refresh auth context to update global state
+      await refreshUser();
       toast.success("Admin account created successfully!");
       router.push("/dashboard");
     } catch (error) {
