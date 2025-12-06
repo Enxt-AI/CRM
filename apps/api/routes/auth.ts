@@ -1,0 +1,398 @@
+import { Router } from "express";
+import type { Request, Response } from "express";
+import prisma from "@db/client";
+import { hashPassword, verifyPassword, generateRandomPassword } from "../lib/password";
+import { signToken, cookieOptions } from "../lib/jwt";
+import { authenticate, requireAdmin } from "../middleware/auth";
+import {
+  setupSchema,
+  signinSchema,
+  changePasswordSchema,
+  createUserSchema,
+} from "../lib/validation";
+
+const router = Router();
+
+// POST /auth/setup - One-time admin creation
+router.post("/setup", async (req: Request, res: Response) => {
+  try {
+    // Check if any admin exists
+    const existingAdmin = await prisma.user.findFirst({
+      where: { role: "ADMIN" },
+    });
+
+    if (existingAdmin) {
+      res.status(400).json({ error: "Setup already completed" });
+      return;
+    }
+
+    // Validate input
+    const validation = setupSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        error: "Validation failed",
+        details: validation.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    const { username, password, fullName } = validation.data;
+
+    // Check if username exists
+    const existingUser = await prisma.user.findUnique({
+      where: { username },
+    });
+
+    if (existingUser) {
+      res.status(400).json({ error: "Username already taken" });
+      return;
+    }
+
+    // Create admin user
+    const passwordHash = await hashPassword(password);
+    const admin = await prisma.user.create({
+      data: {
+        username,
+        passwordHash,
+        fullName,
+        role: "ADMIN",
+        needsPasswordChange: false, // Admin created their own password
+      },
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        role: true,
+      },
+    });
+
+    // Sign JWT and set cookie
+    const token = signToken({
+      userId: admin.id,
+      username: admin.username,
+      role: admin.role,
+    });
+
+    res.cookie("token", token, cookieOptions);
+
+    res.status(201).json({
+      message: "Admin account created successfully",
+      user: admin,
+    });
+  } catch (error) {
+    console.error("Setup error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /auth/check-setup - Check if setup needed
+router.get("/check-setup", async (_req: Request, res: Response) => {
+  try {
+    const adminExists = await prisma.user.findFirst({
+      where: { role: "ADMIN" },
+    });
+
+    res.json({ setupRequired: !adminExists });
+  } catch (error) {
+    console.error("Check setup error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /auth/signin - User login
+router.post("/signin", async (req: Request, res: Response) => {
+  try {
+    // Validate input
+    const validation = signinSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        error: "Validation failed",
+        details: validation.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    const { username, password } = validation.data;
+
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { username },
+    });
+
+    if (!user) {
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      res.status(401).json({ error: "Account is deactivated" });
+      return;
+    }
+
+    // Verify password
+    const isValidPassword = await verifyPassword(password, user.passwordHash);
+    if (!isValidPassword) {
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
+
+    // Update last login
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
+    // Sign JWT and set cookie
+    const token = signToken({
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+    });
+
+    res.cookie("token", token, cookieOptions);
+
+  res.json({
+      message: "Signed in successfully",
+      user: {
+        id: user.id,
+        username: user.username,
+        fullName: user.fullName,
+        role: user.role,
+        needsPasswordChange: user.needsPasswordChange,
+      },
+    });
+  } catch (error) {
+    console.error("Signin error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /auth/signout - User logout
+router.post("/signout", authenticate, (_req: Request, res: Response) => {
+  res.clearCookie("token", { path: "/" });
+  res.json({ message: "Signed out successfully" });
+});
+
+// GET /auth/me - Get current user
+router.get("/me", authenticate, async (req: Request, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+        needsPasswordChange: true,
+        lastLoginAt: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    res.json({ user });
+  } catch (error) {
+    console.error("Get me error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /auth/change-password - Change own password
+router.post("/change-password", authenticate, async (req: Request, res: Response) => {
+  try {
+    // Validate input
+    const validation = changePasswordSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        error: "Validation failed",
+        details: validation.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    const { currentPassword, newPassword } = validation.data;
+
+    // Get user with password hash
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    // Verify current password
+    const isValidPassword = await verifyPassword(currentPassword, user.passwordHash);
+    if (!isValidPassword) {
+      res.status(401).json({ error: "Current password is incorrect" });
+      return;
+    }
+
+    // Hash new password and update
+    const newPasswordHash = await hashPassword(newPassword);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: newPasswordHash,
+        needsPasswordChange: false,
+      },
+    });
+
+    res.json({ message: "Password changed successfully" });
+  } catch (error) {
+    console.error("Change password error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /auth/dismiss-password-change - Dismiss the password change prompt
+router.post("/dismiss-password-change", authenticate, async (req: Request, res: Response) => {
+  try {
+    await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: { needsPasswordChange: false },
+    });
+
+    res.json({ message: "Password change dismissed" });
+  } catch (error) {
+    console.error("Dismiss password change error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /auth/users - Create new user (Admin only)
+router.post("/users", authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    // Validate input
+    const validation = createUserSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        error: "Validation failed",
+        details: validation.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    const { username, fullName, role, password } = validation.data;
+
+    // Check if username exists
+    const existingUser = await prisma.user.findUnique({
+      where: { username },
+    });
+
+    if (existingUser) {
+      res.status(400).json({ error: "Username already taken" });
+      return;
+    }
+
+    // Use provided password or generate random one
+    const plainPassword = password || generateRandomPassword();
+    const passwordHash = await hashPassword(plainPassword);
+
+    // Create user
+    const newUser = await prisma.user.create({
+      data: {
+        username,
+        fullName,
+        role,
+        passwordHash,
+        needsPasswordChange: true, // Force password change on first login
+      },
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+        needsPasswordChange: true,
+        createdAt: true,
+      },
+    });
+
+    res.status(201).json({
+      message: "User created successfully",
+      user: newUser,
+      temporaryPassword: plainPassword, // Return password so admin can share it
+    });
+  } catch (error) {
+    console.error("Create user error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /auth/users - List all users (Admin only)
+router.get("/users", authenticate, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+        needsPasswordChange: true,
+        lastLoginAt: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json({ users });
+  } catch (error) {
+    console.error("List users error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ============================================
+// PATCH /auth/users/:id/toggle-active - Toggle user active status (Admin only)
+// ============================================
+router.patch("/users/:id/toggle-active", authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Prevent self-deactivation
+    if (id === req.user!.userId) {
+      res.status(400).json({ error: "Cannot deactivate your own account" });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: { isActive: !user.isActive },
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+  res.json({
+      message: `User ${updatedUser.isActive ? "activated" : "deactivated"} successfully`,
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Toggle active error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+export default router;

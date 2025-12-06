@@ -15,7 +15,7 @@ model User {
   username       String    @unique // Login identifier
   passwordHash   String    // BCrypt hashed password
   fullName       String
-  role           Role      @default(SALES_REP)
+  role           Role      @default(EMPLOYEE)
   isActive       Boolean   @default(true)
   
   // Security
@@ -41,7 +41,7 @@ model User {
 enum Role {
   ADMIN       // Full access, user management, can delete data
   MANAGER     // View all data, reports, cannot delete users
-  SALES_REP   // View only assigned leads/clients
+  EMPLOYEE    // View only assigned leads/clients
 }
 
 model Lead {

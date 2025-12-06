@@ -1,43 +1,27 @@
-import prisma from "@db/client";
+import express from "express";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import authRouter from "./routes/auth";
 
-async function main() {
-  try {
+const app = express();
 
-    const existingUser = await prisma.user.findUnique({
-      where: { username: "admin" },
-    });
+// Middleware
+app.use(cors({
+  origin: "http://localhost:3000", // Next.js frontend
+  credentials: true, // Allow cookies
+}));
+app.use(express.json());
+app.use(cookieParser());
 
-    if (existingUser) {
-      console.log("   Admin user already exists!");
-      console.log(`   Username: ${existingUser.username}`);
-      console.log(`   Role: ${existingUser.role}`);
-      console.log(`   Active: ${existingUser.isActive}`);
-    } else {
-      // Create admin user if it doesn't exist
-      const user = await prisma.user.create({
-        data: {
-          username: "admin",
-          passwordHash: "admin", // TODO: Hash this properly with bcrypt
-          fullName: "Admin",
-          role: "ADMIN",
-          isActive: true,
-          needsPasswordChange: false,
-        },
-      });
-      console.log("✅ Admin user created successfully!");
-      console.log(`   Username: ${user.username}`);
-      console.log(`   ID: ${user.id}`);
-    }
-  } catch (error: any) {
-    if (error.code === "P2002") {
-      console.log("ℹ️  User already exists (unique constraint)");
-    } else {
-      console.error("❌ Database error:", error.message);
-      process.exit(1);
-    }
-  } finally {
-    console.log("Enxt AI");
-  }
-}
+// Routes
+app.use("/auth", authRouter);
 
-main();
+// Health check
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`API server running on http://localhost:${PORT}`);
+});
