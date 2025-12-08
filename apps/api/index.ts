@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import authRouter from "./routes/auth";
+import leadsRouter from "./routes/leads";
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.use(cookieParser());
 
 // Routes
 app.use("/auth", authRouter);
+app.use("/leads", leadsRouter);
 
 // Health check
 app.get("/health", (_req, res) => {

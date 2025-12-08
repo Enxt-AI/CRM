@@ -57,6 +57,64 @@ export type User = {
   createdAt: string;
 };
 
+// Lead types
+export type LeadSource =
+  | "WEBSITE"
+  | "LINKEDIN"
+  | "REFERRAL"
+  | "COLD_CALL"
+  | "TRADE_SHOW"
+  | "PARTNER"
+  | "EMAIL_CAMPAIGN"
+  | "OTHER";
+
+export type LeadStatus =
+  | "NEW"
+  | "ATTEMPTING_CONTACT"
+  | "CONTACTED"
+  | "QUALIFIED"
+  | "NURTURING"
+  | "DISQUALIFIED"
+  | "CONVERTED";
+
+export type LeadPipelineStage =
+  | "NEW"
+  | "CONTACTED"
+  | "QUALIFIED"
+  | "PROPOSAL"
+  | "NEGOTIATION"
+  | "WON"
+  | "LOST";
+
+export type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+
+export type Lead = {
+  id: string;
+  name: string;
+  companyName: string | null;
+  email: string | null;
+  mobile: string | null;
+  source: LeadSource;
+  sourceDetails: string | null;
+  pipelineStage: LeadPipelineStage;
+  status: LeadStatus;
+  score: number;
+  priority: Priority;
+  tags: string[];
+  ownerId: string;
+  owner: {
+    id: string;
+    fullName: string;
+    username: string;
+  };
+  isConverted: boolean;
+  convertedAt: string | null;
+  lastContactedAt: string | null;
+  nextFollowUpAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 // Auth API
 export const auth = {
   checkSetup: () => 
@@ -101,6 +159,57 @@ export const auth = {
   toggleUserActive: (id: string) =>
     request<{ message: string; user: User }>(`/auth/users/${id}/toggle-active`, {
       method: "PATCH",
+    }),
+};
+
+// Leads API
+export type CreateLeadData = {
+  name: string;
+  companyName?: string | null;
+  email?: string | null;
+  mobile?: string | null;
+  source?: LeadSource;
+  sourceDetails?: string | null;
+  priority?: Priority;
+  tags?: string[];
+};
+
+export type UpdateLeadData = Partial<CreateLeadData> & {
+  pipelineStage?: LeadPipelineStage;
+  status?: LeadStatus;
+  score?: number;
+  nextFollowUpAt?: string | null;
+};
+
+export const leads = {
+  list: () =>
+    request<{ leads: Lead[]; total: number; countByStage: Record<string, number> }>("/leads"),
+
+  stats: () =>
+    request<{
+      total: number;
+      byStatus: Record<string, number>;
+      bySource: Record<string, number>;
+      byPriority: Record<string, number>;
+    }>("/leads/stats"),
+
+  get: (id: string) => request<{ lead: Lead }>(`/leads/${id}`),
+
+  create: (data: CreateLeadData) =>
+    request<{ message: string; lead: Lead }>("/leads", {
+      method: "POST",
+      body: data,
+    }),
+
+  update: (id: string, data: UpdateLeadData) =>
+    request<{ message: string; lead: Lead }>(`/leads/${id}`, {
+      method: "PATCH",
+      body: data,
+    }),
+
+  delete: (id: string) =>
+    request<{ message: string }>(`/leads/${id}`, {
+      method: "DELETE",
     }),
 };
 

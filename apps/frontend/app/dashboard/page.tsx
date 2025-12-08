@@ -1,10 +1,23 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { leads as leadsApi } from "@/lib/api";
+import Link from "next/link";
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const [leadStats, setLeadStats] = useState<{
+    total: number;
+    byStatus: Record<string, number>;
+    bySource: Record<string, number>;
+    byPriority: Record<string, number>;
+  } | null>(null);
+
+  useEffect(() => {
+    leadsApi.stats().then(setLeadStats).catch(console.error);
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -40,8 +53,10 @@ export default function DashboardPage() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-neutral-900">0</div>
-            <p className="text-xs text-neutral-500">No leads yet</p>
+            <div className="text-2xl font-bold text-neutral-900">{leadStats?.total ?? 0}</div>
+            <p className="text-xs text-neutral-500">
+              {leadStats?.total === 0 ? "No leads yet" : "View all leads"}
+            </p>
           </CardContent>
         </Card>
 
@@ -150,7 +165,7 @@ export default function DashboardPage() {
               </div>
             </button>
 
-            <button className="flex items-center gap-3 rounded-lg border border-neutral-200 p-4 text-left transition-colors hover:bg-neutral-50">
+            <Link href="/dashboard/leads" className="flex items-center gap-3 rounded-lg border border-neutral-200 p-4 text-left transition-colors hover:bg-neutral-50">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-neutral-100">
                 <svg
                   className="h-5 w-5 text-neutral-600"
@@ -167,10 +182,10 @@ export default function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-medium text-neutral-900">Schedule Meeting</p>
-                <p className="text-xs text-neutral-500">Book a new meeting</p>
+                <p className="text-sm font-medium text-neutral-900">View Leads</p>
+                <p className="text-xs text-neutral-500">Manage all leads</p>
               </div>
-            </button>
+            </Link>
 
             <button className="flex items-center gap-3 rounded-lg border border-neutral-200 p-4 text-left transition-colors hover:bg-neutral-50">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-neutral-100">
