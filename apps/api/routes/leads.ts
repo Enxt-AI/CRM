@@ -151,7 +151,26 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
     }
 
     const data = validation.data;
-    const { userId } = req.user!;
+    const { userId, role } = req.user!;
+
+    // Determine the owner ID
+    let ownerId = userId;
+    if (data.ownerId) {
+      // Only admin/manager can assign leads to others
+      if (role === "EMPLOYEE") {
+        res.status(403).json({ error: "Employees cannot assign leads to others" });
+        return;
+      }
+      // Manager can only assign to themselves or employees
+      if (role === "MANAGER") {
+        const assignee = await prisma.user.findUnique({ where: { id: data.ownerId } });
+        if (!assignee || (assignee.id !== userId && assignee.role !== "EMPLOYEE")) {
+          res.status(403).json({ error: "Cannot assign to this user" });
+          return;
+        }
+      }
+      ownerId = data.ownerId;
+    }
 
     const lead = await prisma.lead.create({
       data: {
@@ -167,7 +186,7 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
         initialNotes: data.initialNotes || null,
         nextFollowUpAt: data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : null,
         tags: data.tags || [],
-        ownerId: userId,
+        ownerId,
       },
       include: {
         owner: {

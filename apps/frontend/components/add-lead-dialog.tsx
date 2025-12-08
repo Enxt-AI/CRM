@@ -21,6 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { leads, type CreateLeadData, type LeadSource, type Priority, type LeadStatus, type LeadPipelineStage } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { auth, type User } from "@/lib/api";
 import { toast } from "sonner";
 
 const LEAD_SOURCES: { value: LeadSource; label: string }[] = [
@@ -58,13 +60,28 @@ const PIPELINE_STAGES: { value: LeadPipelineStage; label: string }[] = [
 
 type AddLeadDialogProps = {
   onLeadAdded: () => void;
-  children: React.ReactNode;
+  children?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
-  const [open, setOpen] = useState(false);
+export function AddLeadDialog({ onLeadAdded, children, open: externalOpen, onOpenChange }: AddLeadDialogProps) {
+  const { user: currentUser } = useAuth();
+  const [internalOpen, setInternalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<CreateLeadData>({
+  const [users, setUsers] = useState<User[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  
+  // Use external open state if provided, otherwise use internal state
+  const isOpen = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setIsOpen = (open: boolean) => {
+    if (onOpenChange) {
+      onOpenChange(open);
+    } else {
+      setInternalOpen(open);
+    }
+  };
+  const [formData, setFormData] = useState<CreateLeadData & { ownerId?: string }>({
     name: "",
     companyName: "",
     email: "",
@@ -76,6 +93,7 @@ export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
     priority: "MEDIUM",
     initialNotes: "",
     nextFollowUpAt: "",
+    ownerId: currentUser?.id,
   });
 
   const resetForm = () => {
@@ -91,7 +109,37 @@ export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
       priority: "MEDIUM",
       initialNotes: "",
       nextFollowUpAt: "",
+      ownerId: currentUser?.id,
     });
+  };
+
+  // Fetch available users when dialog opens
+  const fetchUsers = async () => {
+    if (!currentUser) return;
+    setUsersLoading(true);
+    try {
+      const { users: allUsers } = await auth.listUsers();
+      // Filter users based on current user's role
+      const filteredUsers = allUsers.filter((u) => {
+        if (currentUser.role === "ADMIN") {
+          // Admin can assign to anyone
+          return true;
+        } else if (currentUser.role === "MANAGER") {
+          // Manager can assign to themselves or employees
+          return u.id === currentUser.id || u.role === "EMPLOYEE";
+        } else {
+          // Employee can only assign to themselves
+          return u.id === currentUser.id;
+        }
+      });
+      setUsers(filteredUsers);
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+      // Fallback: at least show current user
+      setUsers([currentUser]);
+    } finally {
+      setUsersLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -115,7 +163,7 @@ export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
       });
 
       toast.success("Lead created successfully");
-      setOpen(false);
+      setIsOpen(false);
       resetForm();
       onLeadAdded();
     } catch (error) {
@@ -126,8 +174,13 @@ export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={(newOpen) => {
+      setIsOpen(newOpen);
+      if (newOpen) {
+        fetchUsers();
+      }
+    }}>
+      <DialogTrigger asChild>{children && children}</DialogTrigger>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New Lead</DialogTitle>
@@ -184,6 +237,31 @@ export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
                 />
               </div>
             </div>
+
+            {/* Lead Owner - Only show if admin/manager or employee can see their own */}
+            {(currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER") && (
+              <div className="grid gap-2">
+                <Label>Lead Owner</Label>
+                <Select
+                  value={formData.ownerId || ""}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, ownerId: value })
+                  }
+                  disabled={usersLoading}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select owner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.fullName} {u.id === currentUser?.id ? "(You)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Status & Pipeline Stage - Two columns */}
             <div className="grid grid-cols-2 gap-4">
@@ -314,7 +392,7 @@ export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => setIsOpen(false)}
               disabled={loading}
             >
               Cancel

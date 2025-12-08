@@ -5,9 +5,11 @@ import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { leads as leadsApi } from "@/lib/api";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [leadStats, setLeadStats] = useState<{
     total: number;
     byStatus: Record<string, number>;
@@ -143,7 +145,10 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <button className="flex items-center gap-3 rounded-lg border border-neutral-200 p-4 text-left transition-colors hover:bg-neutral-50">
+            <button
+              onClick={() => router.push("/dashboard/leads?openDialog=true")}
+              className="flex items-center gap-3 rounded-lg border border-neutral-200 p-4 text-left transition-colors hover:bg-neutral-50"
+            >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-neutral-100">
                 <svg
                   className="h-5 w-5 text-neutral-600"

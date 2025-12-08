@@ -111,6 +111,7 @@ export const createLeadSchema = z.object({
   initialNotes: z.string().max(2000).optional().nullable(),
   nextFollowUpAt: z.string().optional().nullable(),
   tags: z.array(z.string()).optional().default([]),
+  ownerId: z.string().uuid().optional(),
 });
 
 // Update lead
@@ -132,6 +133,7 @@ export const updateLeadSchema = z.object({
   tags: z.array(z.string()).optional(),
   initialNotes: z.string().max(2000).optional().nullable(),
   nextFollowUpAt: z.string().optional().nullable(),
+  ownerId: z.string().uuid().optional(),
 });
 
 // Convert lead to client

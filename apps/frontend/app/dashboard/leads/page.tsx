@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AddLeadDialog } from "@/components/add-lead-dialog";
 import { leads as leadsApi, type Lead, type LeadPipelineStage, type Priority } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 
 const PIPELINE_STAGES: { value: LeadPipelineStage; label: string; color: string }[] = [
@@ -62,6 +64,9 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function LeadsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { user } = useAuth();
   const [leadsList, setLeadsList] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [countByStage, setCountByStage] = useState<Record<string, number>>({});
@@ -72,6 +77,9 @@ export default function LeadsPage() {
   const [estimatedValue, setEstimatedValue] = useState("");
   const [converting, setConverting] = useState(false);
   const [draggedLead, setDraggedLead] = useState<Lead | null>(null);
+  const [notesDialogOpen, setNotesDialogOpen] = useState(false);
+  const [selectedNotes, setSelectedNotes] = useState<{ name: string; notes: string | null } | null>(null);
+  const [addLeadDialogOpen, setAddLeadDialogOpen] = useState(searchParams?.get("openDialog") === "true");
 
   const fetchLeads = useCallback(async () => {
     try {
@@ -170,9 +178,24 @@ export default function LeadsPage() {
     }
   };
 
+  const handleNotesClick = (lead: Lead) => {
+    setSelectedNotes({
+      name: lead.name,
+      notes: lead.initialNotes,
+    });
+    setNotesDialogOpen(true);
+  };
+
   const getLeadsByStage = (stage: LeadPipelineStage) => {
     return leadsList.filter((lead) => lead.pipelineStage === stage);
   };
+
+  useEffect(() => {
+    if (addLeadDialogOpen && searchParams?.get("openDialog") === "true") {
+      // Clean up the URL parameter
+      router.replace("/dashboard/leads");
+    }
+  }, [addLeadDialogOpen, searchParams, router]);
 
   return (
     <div className="space-y-6">
@@ -352,9 +375,12 @@ export default function LeadsPage() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-neutral-500 max-w-[150px] truncate block">
-                          {lead.initialNotes || "—"}
-                        </span>
+                        <button
+                          onClick={() => handleNotesClick(lead)}
+                          className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline max-w-[150px] truncate block text-left"
+                        >
+                          {lead.initialNotes ? "View Notes" : "—"}
+                        </button>
                       </TableCell>
                       <TableCell>
                         <Button
@@ -480,6 +506,33 @@ export default function LeadsPage() {
             </Button>
             <Button onClick={handleConvert} disabled={converting}>
               {converting ? "Converting..." : "Convert"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Lead Dialog - Manual control based on query param */}
+      <AddLeadDialog open={addLeadDialogOpen} onOpenChange={setAddLeadDialogOpen} onLeadAdded={fetchLeads} />
+
+      {/* View Notes Dialog */}
+      <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Lead Notes</DialogTitle>
+            <DialogDescription>
+              {selectedNotes?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 max-h-[300px] overflow-y-auto">
+              <p className="text-sm text-neutral-700 whitespace-pre-wrap">
+                {selectedNotes?.notes || "No notes available"}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNotesDialogOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
