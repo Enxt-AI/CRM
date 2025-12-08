@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { leads, type CreateLeadData, type LeadSource, type Priority } from "@/lib/api";
+import { leads, type CreateLeadData, type LeadSource, type Priority, type LeadStatus, type LeadPipelineStage } from "@/lib/api";
 import { toast } from "sonner";
 
 const LEAD_SOURCES: { value: LeadSource; label: string }[] = [
@@ -41,6 +41,21 @@ const PRIORITIES: { value: Priority; label: string }[] = [
   { value: "URGENT", label: "Urgent" },
 ];
 
+const STATUSES: { value: LeadStatus; label: string }[] = [
+  { value: "NEW", label: "New" },
+  { value: "ATTEMPTING_CONTACT", label: "Attempting Contact" },
+  { value: "CONTACTED", label: "Contacted" },
+  { value: "QUALIFIED", label: "Qualified" },
+  { value: "NURTURING", label: "Nurturing" },
+];
+
+const PIPELINE_STAGES: { value: LeadPipelineStage; label: string }[] = [
+  { value: "NEW", label: "New" },
+  { value: "CONTACTED", label: "Contacted" },
+  { value: "PROPOSAL", label: "Proposal" },
+  { value: "NEGOTIATION", label: "Negotiation" },
+];
+
 type AddLeadDialogProps = {
   onLeadAdded: () => void;
   children: React.ReactNode;
@@ -56,8 +71,28 @@ export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
     mobile: "",
     source: "OTHER",
     sourceDetails: "",
+    pipelineStage: "NEW",
+    status: "NEW",
     priority: "MEDIUM",
+    initialNotes: "",
+    nextFollowUpAt: "",
   });
+
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      companyName: "",
+      email: "",
+      mobile: "",
+      source: "OTHER",
+      sourceDetails: "",
+      pipelineStage: "NEW",
+      status: "NEW",
+      priority: "MEDIUM",
+      initialNotes: "",
+      nextFollowUpAt: "",
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,20 +109,14 @@ export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
         companyName: formData.companyName || null,
         email: formData.email || null,
         mobile: formData.mobile || null,
-        sourceDetails: formData.sourceDetails || null,
+        sourceDetails: formData.source === "OTHER" ? formData.sourceDetails : null,
+        initialNotes: formData.initialNotes || null,
+        nextFollowUpAt: formData.nextFollowUpAt || null,
       });
 
       toast.success("Lead created successfully");
       setOpen(false);
-      setFormData({
-        name: "",
-        companyName: "",
-        email: "",
-        mobile: "",
-        source: "OTHER",
-        sourceDetails: "",
-        priority: "MEDIUM",
-      });
+      resetForm();
       onLeadAdded();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create lead");
@@ -99,7 +128,7 @@ export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New Lead</DialogTitle>
           <DialogDescription>
@@ -109,28 +138,28 @@ export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
 
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
-            {/* Name - Required */}
-            <div className="grid gap-2">
-              <Label htmlFor="name">
-                Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="John Doe"
-              />
-            </div>
-
-            {/* Company Name */}
-            <div className="grid gap-2">
-              <Label htmlFor="companyName">Company Name</Label>
-              <Input
-                id="companyName"
-                value={formData.companyName || ""}
-                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                placeholder="Acme Inc."
-              />
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="name">
+                  Contact Name <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="John Doe"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="companyName">Company Name</Label>
+                <Input
+                  id="companyName"
+                  value={formData.companyName || ""}
+                  onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                  placeholder="Acme Inc."
+                />
+              </div>
             </div>
 
             {/* Email & Mobile - Two columns */}
@@ -156,7 +185,84 @@ export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
               </div>
             </div>
 
-            {/* Source & Priority - Two columns */}
+            {/* Status & Pipeline Stage - Two columns */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, status: value as LeadStatus })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUSES.map((status) => (
+                      <SelectItem key={status.value} value={status.value}>
+                        {status.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Pipeline Stage</Label>
+                <Select
+                  value={formData.pipelineStage}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, pipelineStage: value as LeadPipelineStage })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select stage" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PIPELINE_STAGES.map((stage) => (
+                      <SelectItem key={stage.value} value={stage.value}>
+                        {stage.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Priority & Next Follow Up - Two columns */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Priority</Label>
+                <Select
+                  value={formData.priority}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, priority: value as Priority })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIORITIES.map((priority) => (
+                      <SelectItem key={priority.value} value={priority.value}>
+                        {priority.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="nextFollowUpAt">Next Follow Up</Label>
+                <Input
+                  id="nextFollowUpAt"
+                  type="datetime-local"
+                  value={formData.nextFollowUpAt || ""}
+                  onChange={(e) => setFormData({ ...formData, nextFollowUpAt: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* Source & Source Details */}
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label>Source</Label>
@@ -178,36 +284,28 @@ export function AddLeadDialog({ onLeadAdded, children }: AddLeadDialogProps) {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
-                <Label>Priority</Label>
-                <Select
-                  value={formData.priority}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, priority: value as Priority })
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PRIORITIES.map((priority) => (
-                      <SelectItem key={priority.value} value={priority.value}>
-                        {priority.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {formData.source === "OTHER" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="sourceDetails">Source Details</Label>
+                  <Input
+                    id="sourceDetails"
+                    value={formData.sourceDetails || ""}
+                    onChange={(e) => setFormData({ ...formData, sourceDetails: e.target.value })}
+                    placeholder="Specify source..."
+                  />
+                </div>
+              )}
             </div>
 
-            {/* Source Details */}
+            {/* Initial Notes - Full width textarea */}
             <div className="grid gap-2">
-              <Label htmlFor="sourceDetails">Source Details</Label>
-              <Input
-                id="sourceDetails"
-                value={formData.sourceDetails || ""}
-                onChange={(e) => setFormData({ ...formData, sourceDetails: e.target.value })}
-                placeholder="LinkedIn Ad Campaign Q4"
+              <Label htmlFor="initialNotes">Initial Notes</Label>
+              <textarea
+                id="initialNotes"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={formData.initialNotes || ""}
+                onChange={(e) => setFormData({ ...formData, initialNotes: e.target.value })}
+                placeholder="Any initial notes about this lead..."
               />
             </div>
           </div>

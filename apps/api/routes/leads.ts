@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import prisma from "@db/client";
 import { authenticate } from "../middleware/auth";
-import { createLeadSchema, updateLeadSchema } from "@repo/zod";
+import { createLeadSchema, updateLeadSchema, convertLeadSchema } from "@repo/zod";
 
 const router = Router();
 
@@ -12,7 +12,8 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
     const { role, userId } = req.user!;
 
     // Build where clause based on role
-    const where = role === "EMPLOYEE" ? { ownerId: userId } : {};
+    // Admin sees all, Manager sees all, Employee sees only their own
+    const where = role === "EMPLOYEE" ? { ownerId: userId, isConverted: false } : { isConverted: false };
 
     const leads = await prisma.lead.findMany({
       where,
@@ -28,7 +29,7 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
       orderBy: { createdAt: "desc" },
     });
 
-    // Get counts by status
+    // Get counts by pipeline stage
     const counts = await prisma.lead.groupBy({
       by: ["pipelineStage"],
       where,
@@ -58,32 +59,41 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
 router.get("/stats", authenticate, async (req: Request, res: Response) => {
   try {
     const { role, userId } = req.user!;
-    const where = role === "EMPLOYEE" ? { ownerId: userId } : {};
+    const baseWhere = role === "EMPLOYEE" ? { ownerId: userId } : {};
+    const activeWhere = { ...baseWhere, isConverted: false };
 
-    const [total, byStatus, bySource, byPriority] = await Promise.all([
-      prisma.lead.count({ where }),
+    const [total, converted, byStatus, bySource, byPriority, byStage] = await Promise.all([
+      prisma.lead.count({ where: activeWhere }),
+      prisma.lead.count({ where: { ...baseWhere, isConverted: true } }),
       prisma.lead.groupBy({
         by: ["status"],
-        where,
+        where: activeWhere,
         _count: true,
       }),
       prisma.lead.groupBy({
         by: ["source"],
-        where,
+        where: activeWhere,
         _count: true,
       }),
       prisma.lead.groupBy({
         by: ["priority"],
-        where,
+        where: activeWhere,
+        _count: true,
+      }),
+      prisma.lead.groupBy({
+        by: ["pipelineStage"],
+        where: activeWhere,
         _count: true,
       }),
     ]);
 
     res.json({
       total,
+      converted,
       byStatus: byStatus.reduce((acc, item) => ({ ...acc, [item.status]: item._count }), {}),
       bySource: bySource.reduce((acc, item) => ({ ...acc, [item.source]: item._count }), {}),
       byPriority: byPriority.reduce((acc, item) => ({ ...acc, [item.priority]: item._count }), {}),
+      byStage: byStage.reduce((acc, item) => ({ ...acc, [item.pipelineStage]: item._count }), {}),
     });
   } catch (error) {
     console.error("Get lead stats error:", error);
@@ -151,7 +161,11 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
         mobile: data.mobile || null,
         source: data.source,
         sourceDetails: data.sourceDetails || null,
+        pipelineStage: data.pipelineStage || "NEW",
+        status: data.status || "NEW",
         priority: data.priority,
+        initialNotes: data.initialNotes || null,
+        nextFollowUpAt: data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : null,
         tags: data.tags || [],
         ownerId: userId,
       },
@@ -222,6 +236,7 @@ router.patch("/:id", authenticate, async (req: Request, res: Response) => {
         ...(data.priority && { priority: data.priority }),
         ...(data.score !== undefined && { score: data.score }),
         ...(data.tags && { tags: data.tags }),
+        ...(data.initialNotes !== undefined && { initialNotes: data.initialNotes }),
         ...(data.nextFollowUpAt !== undefined && {
           nextFollowUpAt: data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : null,
         }),
@@ -276,6 +291,93 @@ router.delete("/:id", authenticate, async (req: Request, res: Response) => {
     res.json({ message: "Lead deleted successfully" });
   } catch (error) {
     console.error("Delete lead error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /leads/:id/convert - Convert lead to client
+router.post("/:id/convert", authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { role, userId } = req.user!;
+
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+    });
+
+    if (!lead) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+
+    // Check access
+    if (role === "EMPLOYEE" && lead.ownerId !== userId) {
+      res.status(403).json({ error: "Access denied" });
+      return;
+    }
+
+    if (lead.isConverted) {
+      res.status(400).json({ error: "Lead is already converted" });
+      return;
+    }
+
+    const validation = convertLeadSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        error: "Validation failed",
+        details: validation.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    const { estimatedValue } = validation.data;
+
+    // Create client and update lead in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Create client from lead
+      const client = await tx.client.create({
+        data: {
+          companyName: lead.companyName || lead.name,
+          primaryContact: lead.name,
+          email: lead.email,
+          mobile: lead.mobile,
+          status: "ACTIVE",
+          lifetimeValue: estimatedValue,
+          accountManagerId: lead.ownerId,
+        },
+      });
+
+      // Update lead as converted
+      const updatedLead = await tx.lead.update({
+        where: { id },
+        data: {
+          isConverted: true,
+          convertedAt: new Date(),
+          convertedClientId: client.id,
+          status: "CONVERTED",
+          estimatedValue: estimatedValue,
+        },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              fullName: true,
+              username: true,
+            },
+          },
+        },
+      });
+
+      return { lead: updatedLead, client };
+    });
+
+    res.json({
+      message: "Lead converted to client successfully",
+      lead: result.lead,
+      client: result.client,
+    });
+  } catch (error) {
+    console.error("Convert lead error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });

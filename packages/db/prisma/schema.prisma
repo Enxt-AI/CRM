@@ -48,55 +48,61 @@ model Lead {
   id          String     @id @default(uuid())
   
   // Basic Information
-  name        String
-  companyName String?
+  name        String     // Contact person name
+  companyName String?    // Company name
   email       String?
   mobile      String?
   
   // Source Tracking
   source      LeadSource @default(OTHER)
-  sourceDetails String?  // e.g., "LinkedIn Ad Campaign Q4"
+  sourceDetails String?  // Text for "Other" source or additional details
   
-  // KANBAN PIPELINE - For visual board management
+  // Initial Notes - captured when lead is created
+  initialNotes String?   @db.Text
+  
+  // KANBAN PIPELINE - 4 stages for visual board
   pipelineStage LeadPipelineStage @default(NEW)
   
   // Status & Qualification
   status      LeadStatus @default(NEW)
   score       Int        @default(0) // 0-100 scoring system
-  priority    Priority   @default(MEDIUM) // Quick visual priority
-  tags        String[]   // e.g., ["High Priority", "Enterprise", "Hot Lead"]
+  priority    Priority   @default(MEDIUM)
+  tags        String[]   // e.g., ["High Priority", "Enterprise"]
   
   // Ownership
   ownerId     String
   owner       User       @relation("LeadOwner", fields: [ownerId], references: [id])
   
   // Rich Data
-  documents   Document[] // Contracts, proposals, requirements
-  activities  Activity[] // Communication history + Follow-ups
-  tasks       Task[]     // Follow-up reminders
-  meetings    Meeting[]  // Scheduled meetings
-  notes       Note[]     // Quick text notes ("Prefers email over calls")
+  documents   Document[]
+  activities  Activity[]
+  tasks       Task[]
+  meetings    Meeting[]
+  notes       Note[]
   
   // Conversion Tracking
   isConverted       Boolean   @default(false)
   convertedAt       DateTime?
   convertedClientId String?   @unique
   client            Client?   @relation(fields: [convertedClientId], references: [id])
+  estimatedValue    Decimal?  @db.Decimal(12, 2) // Asked when converting
   
   // Metadata
   lastContactedAt DateTime?
-  nextFollowUpAt  DateTime? // Important for "Due Today" dashboard
+  nextFollowUpAt  DateTime? // Important for follow-up tracking
   
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   
   @@index([ownerId, pipelineStage])
   @@index([ownerId, status])
+  @@index([ownerId, isConverted])
   @@index([email])
   @@index([status])
   @@index([source])
   @@index([priority])
-  @@index([nextFollowUpAt]) // For "Due Today" queries
+  @@index([nextFollowUpAt])
+  @@index([isConverted])
 }
 
 enum LeadSource {
@@ -120,15 +126,12 @@ enum LeadStatus {
   CONVERTED          // Became a client
 }
 
-// KANBAN BOARD STAGES - Each user sees their own board
+// KANBAN BOARD - 4 main stages for active leads
 enum LeadPipelineStage {
   NEW           // Column 1: Newly assigned
   CONTACTED     // Column 2: Initial contact made
-  QUALIFIED     // Column 3: Needs assessment done
-  PROPOSAL      // Column 4: Proposal stage
-  NEGOTIATION   // Column 5: Discussing terms
-  WON           // Converted to client
-  LOST          // Disqualified/Lost
+  PROPOSAL      // Column 3: Proposal/Demo stage  
+  NEGOTIATION   // Column 4: Discussing terms
 }
 
 enum Priority {

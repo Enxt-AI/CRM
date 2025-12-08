@@ -80,11 +80,8 @@ export type LeadStatus =
 export type LeadPipelineStage =
   | "NEW"
   | "CONTACTED"
-  | "QUALIFIED"
   | "PROPOSAL"
-  | "NEGOTIATION"
-  | "WON"
-  | "LOST";
+  | "NEGOTIATION";
 
 export type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
@@ -96,6 +93,7 @@ export type Lead = {
   mobile: string | null;
   source: LeadSource;
   sourceDetails: string | null;
+  initialNotes: string | null;
   pipelineStage: LeadPipelineStage;
   status: LeadStatus;
   score: number;
@@ -109,6 +107,7 @@ export type Lead = {
   };
   isConverted: boolean;
   convertedAt: string | null;
+  estimatedValue: number | null;
   lastContactedAt: string | null;
   nextFollowUpAt: string | null;
   createdAt: string;
@@ -170,15 +169,33 @@ export type CreateLeadData = {
   mobile?: string | null;
   source?: LeadSource;
   sourceDetails?: string | null;
+  pipelineStage?: LeadPipelineStage;
+  status?: LeadStatus;
   priority?: Priority;
+  initialNotes?: string | null;
+  nextFollowUpAt?: string | null;
   tags?: string[];
 };
 
 export type UpdateLeadData = Partial<CreateLeadData> & {
-  pipelineStage?: LeadPipelineStage;
-  status?: LeadStatus;
   score?: number;
-  nextFollowUpAt?: string | null;
+};
+
+export type ConvertLeadData = {
+  estimatedValue: number;
+};
+
+export type Client = {
+  id: string;
+  companyName: string;
+  primaryContact: string;
+  email: string | null;
+  mobile: string | null;
+  status: string;
+  lifetimeValue: number;
+  accountManagerId: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export const leads = {
@@ -188,9 +205,11 @@ export const leads = {
   stats: () =>
     request<{
       total: number;
+      converted: number;
       byStatus: Record<string, number>;
       bySource: Record<string, number>;
       byPriority: Record<string, number>;
+      byStage: Record<string, number>;
     }>("/leads/stats"),
 
   get: (id: string) => request<{ lead: Lead }>(`/leads/${id}`),
@@ -210,6 +229,12 @@ export const leads = {
   delete: (id: string) =>
     request<{ message: string }>(`/leads/${id}`, {
       method: "DELETE",
+    }),
+
+  convert: (id: string, data: ConvertLeadData) =>
+    request<{ message: string; lead: Lead; client: Client }>(`/leads/${id}/convert`, {
+      method: "POST",
+      body: data,
     }),
 };
 

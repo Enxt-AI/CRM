@@ -6,11 +6,13 @@ export {
   createUserSchema,
   createLeadSchema,
   updateLeadSchema,
+  convertLeadSchema,
   type SetupInput,
   type SigninInput,
   type ChangePasswordInput,
   type CreateUserInput,
   type CreateLeadInput,
   type UpdateLeadInput,
+  type ConvertLeadInput,
 } from "@repo/zod";
 
