@@ -250,11 +250,40 @@ export type Deal = {
   actualCloseDate: string | null;
   nextSteps: string | null;
   clientId: string;
+  ownerId: string;
+  owner?: {
+    id: string;
+    fullName: string;
+    username: string;
+  };
+  client?: {
+    id: string;
+    companyName: string;
+    primaryContact: string;
+    email: string | null;
+    mobile: string | null;
+    accountManagerId: string;
+  };
+  isDeleted: boolean;
+  deletedAt: string | null;
+  deletedById: string | null;
+  deletedBy?: {
+    id: string;
+    fullName: string;
+    username: string;
+  };
   createdAt: string;
   updatedAt: string;
 };
 
-export type DealStage = "DISCOVERY" | "PROPOSAL_SENT" | "NEGOTIATION" | "CLOSED_WON" | "CLOSED_LOST";
+export type DealStage = 
+  | "QUALIFICATION" 
+  | "NEEDS_ANALYSIS" 
+  | "VALUE_PROPOSITION" 
+  | "PROPOSAL_PRICE_QUOTE" 
+  | "NEGOTIATION" 
+  | "CLOSED_WON" 
+  | "CLOSED_LOST";
 
 export type Document = {
   id: string;
@@ -449,6 +478,7 @@ export type AddDealData = {
   probability?: number;
   expectedCloseDate?: string | null;
   nextSteps?: string | null;
+  ownerId?: string;
 };
 
 export type UpdateDealData = Partial<AddDealData>;
@@ -508,6 +538,40 @@ export const clients = {
     request<{ message: string; deal: Deal }>(`/clients/${clientId}/deals/${dealId}`, {
       method: "PATCH",
       body: data,
+    }),
+};
+
+// Deals API
+export const deals = {
+  list: (includeDeleted?: boolean) => 
+    request<{ 
+      deals: Deal[]; 
+      dealsByStage: Record<DealStage, Deal[]>;
+      stageValues: Record<DealStage, number>;
+      totalValue: number;
+      total: number;
+    }>(`/deals${includeDeleted ? "?includeDeleted=true" : ""}`),
+
+  archived: () =>
+    request<{ deals: Deal[]; total: number }>("/deals/archived"),
+
+  get: (id: string) => 
+    request<{ deal: Deal }>(`/deals/${id}`),
+
+  update: (id: string, data: UpdateDealData) =>
+    request<{ message: string; deal: Deal }>(`/deals/${id}`, {
+      method: "PATCH",
+      body: data,
+    }),
+
+  softDelete: (id: string) =>
+    request<{ message: string; deal: Deal }>(`/deals/${id}`, {
+      method: "DELETE",
+    }),
+
+  restore: (id: string) =>
+    request<{ message: string; deal: Deal }>(`/deals/${id}/restore`, {
+      method: "POST",
     }),
 };
 

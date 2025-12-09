@@ -95,6 +95,9 @@ router.get("/:id", authenticate, async (req: Request, res: Response) => {
           },
         },
         deals: {
+          where: {
+            isDeleted: false, // Only show active deals
+          },
           orderBy: { createdAt: "desc" },
         },
         documents: {
@@ -462,6 +465,11 @@ router.post("/:id/deals", authenticate, async (req: Request, res: Response) => {
     const { id } = req.params;
     const { role, userId } = req.user!;
 
+    if (!id) {
+      res.status(400).json({ error: "Client ID is required" });
+      return;
+    }
+
     const validation = addDealSchema.safeParse(req.body);
     if (!validation.success) {
       res.status(400).json({
@@ -489,16 +497,15 @@ router.post("/:id/deals", authenticate, async (req: Request, res: Response) => {
         description: data.description || null,
         value: data.value,
         budget: data.budget !== undefined ? data.budget : null,
-        currency: data.currency,
+        currency: data.currency || "INR",
         dealType: data.dealType || null,
         industry: data.industry || client.industry || null,
-        stage: data.stage,
-        probability: data.probability,
+        stage: data.stage || "QUALIFICATION",
+        probability: data.probability || 50,
         expectedCloseDate: data.expectedCloseDate ? new Date(data.expectedCloseDate) : null,
         nextSteps: data.nextSteps || null,
-        client: {
-          connect: { id },
-        },
+        ownerId: data.ownerId || client.accountManagerId,
+        clientId: id,
       },
     });
 

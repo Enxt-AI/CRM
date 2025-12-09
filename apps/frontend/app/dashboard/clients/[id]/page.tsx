@@ -44,16 +44,20 @@ import {
 import { toast } from "sonner";
 
 const DEAL_STAGE_LABELS: Record<DealStage, string> = {
-  DISCOVERY: "Discovery",
-  PROPOSAL_SENT: "Proposal Sent",
+  QUALIFICATION: "Qualification",
+  NEEDS_ANALYSIS: "Needs Analysis",
+  VALUE_PROPOSITION: "Value Proposition",
+  PROPOSAL_PRICE_QUOTE: "Proposal/Quote",
   NEGOTIATION: "Negotiation",
   CLOSED_WON: "Closed Won",
   CLOSED_LOST: "Closed Lost",
 };
 
 const DEAL_STAGE_STYLES: Record<DealStage, string> = {
-  DISCOVERY: "bg-blue-100 text-blue-700 border-blue-200",
-  PROPOSAL_SENT: "bg-purple-100 text-purple-700 border-purple-200",
+  QUALIFICATION: "bg-slate-100 text-slate-700 border-slate-200",
+  NEEDS_ANALYSIS: "bg-blue-100 text-blue-700 border-blue-200",
+  VALUE_PROPOSITION: "bg-purple-100 text-purple-700 border-purple-200",
+  PROPOSAL_PRICE_QUOTE: "bg-yellow-100 text-yellow-700 border-yellow-200",
   NEGOTIATION: "bg-amber-100 text-amber-700 border-amber-200",
   CLOSED_WON: "bg-green-100 text-green-700 border-green-200",
   CLOSED_LOST: "bg-red-100 text-red-700 border-red-200",
@@ -501,7 +505,7 @@ function AddDealDialog({
   const [formData, setFormData] = useState<AddDealData>({
     title: "",
     value: 0,
-    stage: "DISCOVERY",
+    stage: "QUALIFICATION",
     probability: 50,
     currency: "INR",
   });
@@ -514,7 +518,7 @@ function AddDealDialog({
       toast.success("Deal added successfully");
       onOpenChange(false);
       onSuccess();
-      setFormData({ title: "", value: 0, stage: "DISCOVERY", probability: 50, currency: "INR" });
+      setFormData({ title: "", value: 0, stage: "QUALIFICATION", probability: 50, currency: "INR" });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to add deal");
     } finally {
@@ -579,8 +583,10 @@ function AddDealDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="DISCOVERY">Discovery</SelectItem>
-                  <SelectItem value="PROPOSAL_SENT">Proposal Sent</SelectItem>
+                  <SelectItem value="QUALIFICATION">Qualification</SelectItem>
+                  <SelectItem value="NEEDS_ANALYSIS">Needs Analysis</SelectItem>
+                  <SelectItem value="VALUE_PROPOSITION">Value Proposition</SelectItem>
+                  <SelectItem value="PROPOSAL_PRICE_QUOTE">Proposal/Quote</SelectItem>
                   <SelectItem value="NEGOTIATION">Negotiation</SelectItem>
                   <SelectItem value="CLOSED_WON">Closed Won</SelectItem>
                   <SelectItem value="CLOSED_LOST">Closed Lost</SelectItem>

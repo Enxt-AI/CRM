@@ -217,11 +217,24 @@ export const addDealSchema = z.object({
   currency: z.string().max(10).default("INR"),
   dealType: z.string().max(100).optional().nullable(),
   industry: z.string().max(100).optional().nullable(),
-  stage: z.enum(["DISCOVERY", "PROPOSAL_SENT", "NEGOTIATION", "CLOSED_WON", "CLOSED_LOST"]).default("DISCOVERY"),
+  stage: z.enum(["QUALIFICATION", "NEEDS_ANALYSIS", "VALUE_PROPOSITION", "PROPOSAL_PRICE_QUOTE", "NEGOTIATION", "CLOSED_WON", "CLOSED_LOST"]).default("QUALIFICATION"),
   probability: z.number().min(0).max(100).default(50),
   expectedCloseDate: z.string().optional().nullable(), // ISO date string
   nextSteps: z.string().max(1000).optional().nullable(),
+  ownerId: z.string().uuid().optional(), // If not provided, use client's account manager
 });
 
 // Update deal
 export const updateDealSchema = addDealSchema.partial();
+
+// Soft delete deal
+export const softDeleteDealSchema = z.object({
+  reason: z.string().max(500).optional().nullable(),
+});
+
+// Restore deal
+export const restoreDealSchema = z.object({});
+
+export const dealStageEnum = z.enum(["QUALIFICATION", "NEEDS_ANALYSIS", "VALUE_PROPOSITION", "PROPOSAL_PRICE_QUOTE", "NEGOTIATION", "CLOSED_WON", "CLOSED_LOST"]);
+
+export type DealStage = z.infer<typeof dealStageEnum>;

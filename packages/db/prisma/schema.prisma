@@ -25,6 +25,8 @@ model User {
   // Relations
   leads          Lead[]    @relation("LeadOwner")
   clients        Client[]  @relation("AccountManager")
+  deals          Deal[]    @relation("DealOwner")
+  deletedDeals   Deal[]    @relation("DealDeleter")
   tasks          Task[]    @relation("TaskAssignee")
   meetings       Meeting[] @relation("MeetingOrganizer")
   activities     Activity[] @relation("ActivityCreator")
@@ -212,7 +214,7 @@ model Deal {
   industry    String?    // Copied from Client or specific to deal
   
   // Pipeline Stage
-  stage       DealStage  @default(DISCOVERY)
+  stage       DealStage  @default(QUALIFICATION)
   progress    Int        @default(0) // 0-100 percentage
   probability Int        @default(50) // Win probability 0-100
   
@@ -222,6 +224,16 @@ model Deal {
   
   // Next Steps (Action Items)
   nextSteps   String?    @db.Text // "Send proposal by Friday"
+  
+  // Ownership - Track who owns this deal
+  ownerId     String
+  owner       User       @relation("DealOwner", fields: [ownerId], references: [id])
+  
+  // Soft Delete - Archive deals after closed
+  isDeleted   Boolean    @default(false)
+  deletedAt   DateTime?
+  deletedById String?
+  deletedBy   User?      @relation("DealDeleter", fields: [deletedById], references: [id])
   
   // Relations
   clientId    String
@@ -233,15 +245,20 @@ model Deal {
   
   @@index([clientId, stage])
   @@index([stage])
+  @@index([ownerId, stage])
+  @@index([ownerId, isDeleted])
+  @@index([isDeleted, deletedAt])
   @@index([expectedCloseDate])
 }
 
 enum DealStage {
-  DISCOVERY      // Understanding needs
-  PROPOSAL_SENT  // Sent formal proposal
-  NEGOTIATION    // Discussing terms/pricing
-  CLOSED_WON     // Successfully closed
-  CLOSED_LOST    // Lost to competitor or budget
+  QUALIFICATION           // Initial qualification
+  NEEDS_ANALYSIS         // Understanding needs
+  VALUE_PROPOSITION      // Presenting value
+  PROPOSAL_PRICE_QUOTE   // Sent formal proposal with pricing
+  NEGOTIATION            // Discussing terms/pricing
+  CLOSED_WON             // Successfully closed
+  CLOSED_LOST            // Lost to competitor or budget
 }
 
 // =========================================
