@@ -191,12 +191,162 @@ export type Client = {
   primaryContact: string;
   email: string | null;
   mobile: string | null;
-  status: string;
+  industry: string | null;
+  domain: string | null;
+  companySize: string | null;
+  gstNumber: string | null;
+  address: string | null;
+  website: string | null;
+  googleSheetUrl: string | null;
+  notionPageUrl: string | null;
+  slackChannel: string | null;
+  status: ClientStatus;
   lifetimeValue: number;
   accountManagerId: string;
+  accountManager: {
+    id: string;
+    fullName: string;
+    username: string;
+  };
+  deals?: Deal[];
+  documents?: Document[];
+  tasks?: Task[];
+  meetings?: Meeting[];
+  notes?: Note[];
+  activities?: Activity[];
+  originLead?: {
+    id: string;
+    name: string;
+    source: string;
+    convertedAt: string;
+  };
+  _count?: {
+    deals: number;
+    documents: number;
+    tasks: number;
+    meetings: number;
+  };
+  totalDealsValue?: number;
+  activeDealsCount?: number;
   createdAt: string;
   updatedAt: string;
 };
+
+export type ClientStatus = "ACTIVE" | "INACTIVE" | "CHURNED" | "PAUSED";
+
+export type Deal = {
+  id: string;
+  title: string;
+  description: string | null;
+  value: number;
+  budget: number | null;
+  currency: string;
+  dealType: string | null;
+  industry: string | null;
+  stage: DealStage;
+  progress: number;
+  probability: number;
+  expectedCloseDate: string | null;
+  actualCloseDate: string | null;
+  nextSteps: string | null;
+  clientId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DealStage = "DISCOVERY" | "PROPOSAL_SENT" | "NEGOTIATION" | "CLOSED_WON" | "CLOSED_LOST";
+
+export type Document = {
+  id: string;
+  name: string;
+  url: string;
+  fileType: string;
+  fileSize: number | null;
+  isLink: boolean;
+  category: string | null;
+  uploadedAt: string;
+};
+
+export type Task = {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: Priority;
+  type: TaskType;
+  isCompleted: boolean;
+  completedAt: string | null;
+  assignedToId: string;
+  assignedTo: {
+    id: string;
+    fullName: string;
+  };
+  dueDate: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TaskType = "GENERAL" | "CALL" | "EMAIL" | "FOLLOW_UP" | "PROPOSAL" | "CONTRACT";
+
+export type Meeting = {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  meetingUrl: string | null;
+  startTime: string;
+  endTime: string;
+  status: MeetingStatus;
+  organizerId: string;
+  organizer: {
+    id: string;
+    fullName: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MeetingStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+
+export type Note = {
+  id: string;
+  content: string;
+  isPinned: boolean;
+  authorId: string;
+  author: {
+    id: string;
+    fullName: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Activity = {
+  id: string;
+  type: ActivityType;
+  title: string;
+  description: string | null;
+  isFollowUp: boolean;
+  followUpDate: string | null;
+  createdById: string;
+  createdBy: {
+    id: string;
+    fullName: string;
+  };
+  occurredAt: string;
+  createdAt: string;
+};
+
+export type ActivityType =
+  | "CALL"
+  | "EMAIL"
+  | "MEETING"
+  | "FOLLOW_UP"
+  | "NOTE"
+  | "STATUS_CHANGE"
+  | "DOCUMENT_UPLOAD"
+  | "TASK_COMPLETED"
+  | "DEAL_CREATED"
+  | "CONVERTED";
 
 export const leads = {
   list: () =>
@@ -234,6 +384,129 @@ export const leads = {
   convert: (id: string, data: ConvertLeadData) =>
     request<{ message: string; lead: Lead; client: Client }>(`/leads/${id}/convert`, {
       method: "POST",
+      body: data,
+    }),
+};
+
+// Clients API
+export type UpdateClientData = Partial<{
+  companyName: string;
+  primaryContact: string;
+  email: string | null;
+  mobile: string | null;
+  industry: string | null;
+  domain: string | null;
+  companySize: string | null;
+  gstNumber: string | null;
+  address: string | null;
+  website: string | null;
+  googleSheetUrl: string | null;
+  notionPageUrl: string | null;
+  slackChannel: string | null;
+  status: ClientStatus;
+  lifetimeValue: number;
+}>;
+
+export type AddDocumentData = {
+  name: string;
+  category?: string | null;
+  isLink: boolean;
+  url?: string;
+};
+
+export type AddTaskData = {
+  title: string;
+  description?: string | null;
+  priority?: Priority;
+  type?: TaskType;
+  dueDate: string;
+  assignedToId?: string;
+};
+
+export type AddMeetingData = {
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  meetingUrl?: string | null;
+  startTime: string;
+  endTime: string;
+};
+
+export type AddNoteData = {
+  content: string;
+  isPinned?: boolean;
+};
+
+export type AddDealData = {
+  title: string;
+  description?: string | null;
+  value: number;
+  budget?: number | null;
+  currency?: string;
+  dealType?: string | null;
+  industry?: string | null;
+  stage?: DealStage;
+  probability?: number;
+  expectedCloseDate?: string | null;
+  nextSteps?: string | null;
+};
+
+export type UpdateDealData = Partial<AddDealData>;
+
+export const clients = {
+  list: () => request<{ clients: Client[]; total: number }>("/clients"),
+
+  get: (id: string) => request<{ client: Client }>(`/clients/${id}`),
+
+  update: (id: string, data: UpdateClientData) =>
+    request<{ message: string; client: Client }>(`/clients/${id}`, {
+      method: "PATCH",
+      body: data,
+    }),
+
+  // Documents
+  addDocument: (clientId: string, data: AddDocumentData) =>
+    request<{ message: string; document: Document }>(`/clients/${clientId}/documents`, {
+      method: "POST",
+      body: data,
+    }),
+
+  deleteDocument: (clientId: string, documentId: string) =>
+    request<{ message: string }>(`/clients/${clientId}/documents/${documentId}`, {
+      method: "DELETE",
+    }),
+
+  // Tasks
+  addTask: (clientId: string, data: AddTaskData) =>
+    request<{ message: string; task: Task }>(`/clients/${clientId}/tasks`, {
+      method: "POST",
+      body: data,
+    }),
+
+  // Meetings
+  addMeeting: (clientId: string, data: AddMeetingData) =>
+    request<{ message: string; meeting: Meeting }>(`/clients/${clientId}/meetings`, {
+      method: "POST",
+      body: data,
+    }),
+
+  // Notes
+  addNote: (clientId: string, data: AddNoteData) =>
+    request<{ message: string; note: Note }>(`/clients/${clientId}/notes`, {
+      method: "POST",
+      body: data,
+    }),
+
+  // Deals
+  addDeal: (clientId: string, data: AddDealData) =>
+    request<{ message: string; deal: Deal }>(`/clients/${clientId}/deals`, {
+      method: "POST",
+      body: data,
+    }),
+
+  updateDeal: (clientId: string, dealId: string, data: UpdateDealData) =>
+    request<{ message: string; deal: Deal }>(`/clients/${clientId}/deals/${dealId}`, {
+      method: "PATCH",
       body: data,
     }),
 };

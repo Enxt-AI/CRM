@@ -1,8 +1,5 @@
 import { z } from "zod";
 
-// ================================
-// AUTH SCHEMAS
-// ================================
 
 // Setup - First admin creation
 export const setupSchema = z.object({
@@ -156,3 +153,75 @@ export type LeadSource = z.infer<typeof leadSourceEnum>;
 export type LeadStatus = z.infer<typeof leadStatusEnum>;
 export type LeadPipelineStage = z.infer<typeof leadPipelineStageEnum>;
 export type Priority = z.infer<typeof priorityEnum>;
+export const clientStatusEnum = z.enum(["ACTIVE", "INACTIVE", "CHURNED", "PAUSED"]);
+
+export const updateClientSchema = z.object({
+  companyName: z.string().min(2).max(200).optional(),
+  primaryContact: z.string().min(2).max(100).optional(),
+  email: z.string().email("Invalid email address").optional().nullable().or(z.literal("")),
+  mobile: z.string().max(20).optional().nullable(),
+  industry: z.string().max(100).optional().nullable(),
+  domain: z.string().max(100).optional().nullable(),
+  companySize: z.string().max(50).optional().nullable(),
+  gstNumber: z.string().max(50).optional().nullable(),
+  address: z.string().max(500).optional().nullable(),
+  website: z.string().url("Invalid URL").optional().nullable().or(z.literal("")),
+  googleSheetUrl: z.string().url("Invalid URL").optional().nullable().or(z.literal("")),
+  notionPageUrl: z.string().url("Invalid URL").optional().nullable().or(z.literal("")),
+  slackChannel: z.string().max(100).optional().nullable(),
+  status: clientStatusEnum.optional(),
+  lifetimeValue: z.number().min(0).optional(),
+});
+
+// Add document (for both leads and clients)
+export const addDocumentSchema = z.object({
+  name: z.string().min(1).max(255),
+  category: z.string().max(100).optional().nullable(),
+  isLink: z.boolean().default(false),
+  url: z.string().optional(), // For links
+  // For file uploads, file will be handled separately via multipart
+});
+
+// Add task
+export const addTaskSchema = z.object({
+  title: z.string().min(1).max(255),
+  description: z.string().max(2000).optional().nullable(),
+  priority: priorityEnum.default("MEDIUM"),
+  type: z.enum(["GENERAL", "CALL", "EMAIL", "FOLLOW_UP", "PROPOSAL", "CONTRACT"]).default("GENERAL"),
+  dueDate: z.string(), // ISO date string
+  assignedToId: z.string().uuid().optional(), // If not provided, assign to current user
+});
+
+// Add meeting
+export const addMeetingSchema = z.object({
+  title: z.string().min(1).max(255),
+  description: z.string().max(2000).optional().nullable(),
+  location: z.string().max(255).optional().nullable(),
+  meetingUrl: z.string().url("Invalid URL").optional().nullable().or(z.literal("")),
+  startTime: z.string(), // ISO datetime string
+  endTime: z.string(), // ISO datetime string
+});
+
+// Add note
+export const addNoteSchema = z.object({
+  content: z.string().min(1).max(5000),
+  isPinned: z.boolean().default(false),
+});
+
+// Add deal (revenue)
+export const addDealSchema = z.object({
+  title: z.string().min(1).max(255),
+  description: z.string().max(2000).optional().nullable(),
+  value: z.number().min(0),
+  budget: z.number().min(0).optional().nullable(),
+  currency: z.string().max(10).default("INR"),
+  dealType: z.string().max(100).optional().nullable(),
+  industry: z.string().max(100).optional().nullable(),
+  stage: z.enum(["DISCOVERY", "PROPOSAL_SENT", "NEGOTIATION", "CLOSED_WON", "CLOSED_LOST"]).default("DISCOVERY"),
+  probability: z.number().min(0).max(100).default(50),
+  expectedCloseDate: z.string().optional().nullable(), // ISO date string
+  nextSteps: z.string().max(1000).optional().nullable(),
+});
+
+// Update deal
+export const updateDealSchema = addDealSchema.partial();
