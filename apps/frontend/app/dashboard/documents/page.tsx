@@ -66,8 +66,11 @@ export default function DocumentsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
+      
+      // Load folders and documents
+      // Non-admin users don't need folders (they see flat document list)
       const [foldersData, docsData] = await Promise.all([
-        folders.list(),
+        isAdmin ? folders.list() : Promise.resolve([]),
         documents.list(),
       ]);
       setFolderList(foldersData);
@@ -117,15 +120,20 @@ export default function DocumentsPage() {
     }
   };
 
-  // Get documents in selected folder or root
-  const filteredDocuments = selectedFolder
-    ? documentList.filter((d) => d.folderId === selectedFolder)
-    : documentList.filter((d) => !d.folderId);
+  // Get documents in selected folder or root (ADMIN ONLY)
+  // For non-admin, show ALL documents in a flat list
+  const filteredDocuments = isAdmin
+    ? selectedFolder
+      ? documentList.filter((d) => d.folderId === selectedFolder)
+      : documentList.filter((d) => !d.folderId)
+    : documentList; // Non-admin sees all their documents
 
-  // Get subfolders of selected folder or root folders
-  const filteredFolders = selectedFolder
-    ? folderList.filter((f) => f.parentId === selectedFolder)
-    : folderList.filter((f) => !f.parentId);
+  // Get subfolders of selected folder or root folders (ADMIN ONLY)
+  const filteredFolders = isAdmin
+    ? selectedFolder
+      ? folderList.filter((f) => f.parentId === selectedFolder)
+      : folderList.filter((f) => !f.parentId)
+    : []; // Non-admin sees no folders
 
   const selectedFolderData = selectedFolder
     ? folderList.find((f) => f.id === selectedFolder)
@@ -176,24 +184,26 @@ export default function DocumentsPage() {
         )}
       </div>
 
-      {/* Breadcrumb */}
-      <div className="mb-4 flex items-center gap-2 text-sm text-gray-600">
-        <button
-          onClick={() => setSelectedFolder(null)}
-          className="hover:text-blue-600 font-medium"
-        >
-          Root
-        </button>
-        {selectedFolderData && (
-          <>
-            <span>/</span>
-            <span className="text-gray-900 font-medium">{selectedFolderData.name}</span>
-          </>
-        )}
-      </div>
+      {/* Breadcrumb - Admin Only */}
+      {isAdmin && (
+        <div className="mb-4 flex items-center gap-2 text-sm text-gray-600">
+          <button
+            onClick={() => setSelectedFolder(null)}
+            className="hover:text-blue-600 font-medium"
+          >
+            Root
+          </button>
+          {selectedFolderData && (
+            <>
+              <span>/</span>
+              <span className="text-gray-900 font-medium">{selectedFolderData.name}</span>
+            </>
+          )}
+        </div>
+      )}
 
-      {/* Folders Grid */}
-      {filteredFolders.length > 0 && (
+      {/* Folders Grid - Admin Only */}
+      {isAdmin && filteredFolders.length > 0 && (
         <div className="mb-8">
           <h2 className="text-lg font-semibold mb-3">Folders</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -243,7 +253,7 @@ export default function DocumentsPage() {
           <Card>
             <CardContent className="p-8 text-center text-gray-500">
               <FileIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>No documents in this folder</p>
+              <p>{isAdmin ? "No documents in this folder" : "No documents shared with you"}</p>
             </CardContent>
           </Card>
         ) : (
@@ -256,6 +266,11 @@ export default function DocumentsPage() {
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold truncate">{doc.name}</h3>
                       <p className="text-xs text-gray-500">{formatFileSize(doc.fileSize)}</p>
+                      {!isAdmin && doc.folder && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          📁 {doc.folder.name}
+                        </p>
+                      )}
                       <p className="text-xs text-gray-400 mt-1">
                         {doc.type === "PERSONAL" ? "🔒 Personal" : "👥 Shared"}
                       </p>
@@ -334,9 +349,33 @@ function UploadDialog({
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
 
+  // Get current folder data to determine smart defaults
+  const currentFolderData = currentFolder ? folderList.find(f => f.id === currentFolder) : null;
+  const isInPersonalFolder = currentFolderData?.type === "PERSONAL";
+  const isInSharedFolder = currentFolderData?.type === "SHARED";
+  const isAtRoot = !currentFolder;
+
   useEffect(() => {
     setFolderId(currentFolder);
-  }, [currentFolder]);
+    
+    // Smart defaults based on current location
+    if (isInPersonalFolder) {
+      // Inside PERSONAL folder → force PERSONAL type
+      console.log("[Upload] Inside PERSONAL folder, forcing PERSONAL type");
+      setType("PERSONAL");
+      setSelectedUsers([]);
+    } else if (isInSharedFolder && currentFolderData?.sharedWithUsers) {
+      // Inside SHARED folder → inherit folder's sharing
+      console.log("[Upload] Inside SHARED folder, inheriting users:", currentFolderData.sharedWithUsers.map(u => u.fullName));
+      setType("SHARED");
+      setSelectedUsers(currentFolderData.sharedWithUsers.map(u => u.id));
+    } else {
+      // At root → default to SHARED, empty users
+      console.log("[Upload] At root, defaulting to SHARED with no users");
+      setType("SHARED");
+      setSelectedUsers([]);
+    }
+  }, [currentFolder, currentFolderData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -394,18 +433,32 @@ function UploadDialog({
                 placeholder="Leave empty to use filename"
               />
             </div>
-            <div>
-              <Label>Type</Label>
-              <Select value={type} onValueChange={(v: any) => setType(v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SHARED">👥 Shared</SelectItem>
-                  <SelectItem value="PERSONAL">🔒 Personal (Admin Only)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            
+            {/* Type selection - Only show at root */}
+            {isAtRoot && (
+              <div>
+                <Label>Type</Label>
+                <Select value={type} onValueChange={(v: any) => setType(v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SHARED">👥 Shared</SelectItem>
+                    <SelectItem value="PERSONAL">🔒 Personal (Admin Only)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
+            {/* Show folder type info when inside a folder */}
+            {!isAtRoot && (
+              <div className="border rounded p-2 bg-blue-50 text-sm text-blue-900">
+                <p className="font-medium">
+                  {isInPersonalFolder && "🔒 Personal Folder - Document will be private (Admin only)"}
+                  {isInSharedFolder && "👥 Shared Folder - Document will inherit folder sharing"}
+                </p>
+              </div>
+            )}
             <div>
               <Label>Folder</Label>
               {currentFolder ? (
@@ -429,7 +482,9 @@ function UploadDialog({
                 </Select>
               )}
             </div>
-            {type === "SHARED" && (
+            
+            {/* User selection - Only show at root for SHARED type OR hide when in shared folder */}
+            {type === "SHARED" && isAtRoot && (
               <div>
                 <Label>Share with Users</Label>
                 <div className="max-h-40 overflow-y-auto border rounded p-2 space-y-2">
@@ -448,6 +503,16 @@ function UploadDialog({
                       <span className="text-sm">{u.fullName} ({u.role})</span>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Show inherited users when in shared folder */}
+            {isInSharedFolder && currentFolderData?.sharedWithUsers && currentFolderData.sharedWithUsers.length > 0 && (
+              <div>
+                <Label>Shared with (inherited from folder)</Label>
+                <div className="border rounded p-2 bg-gray-50 text-sm text-gray-700">
+                  {currentFolderData.sharedWithUsers.map(u => u.fullName).join(", ")}
                 </div>
               </div>
             )}
@@ -488,9 +553,30 @@ function CreateFolderDialog({
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
 
+  // Get parent folder data to determine smart defaults
+  const parentFolderData = currentFolder ? folderList.find(f => f.id === currentFolder) : null;
+  const isInPersonalFolder = parentFolderData?.type === "PERSONAL";
+  const isInSharedFolder = parentFolderData?.type === "SHARED";
+  const isAtRoot = !currentFolder;
+
   useEffect(() => {
     setParentId(currentFolder);
-  }, [currentFolder]);
+    
+    // Smart defaults based on parent location
+    if (isInPersonalFolder) {
+      // Inside PERSONAL folder → force PERSONAL type
+      setType("PERSONAL");
+      setSelectedUsers([]);
+    } else if (isInSharedFolder && parentFolderData?.sharedWithUsers) {
+      // Inside SHARED folder → inherit folder's sharing
+      setType("SHARED");
+      setSelectedUsers(parentFolderData.sharedWithUsers.map(u => u.id));
+    } else {
+      // At root → default to SHARED, empty users
+      setType("SHARED");
+      setSelectedUsers([]);
+    }
+  }, [currentFolder, parentFolderData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -533,18 +619,32 @@ function CreateFolderDialog({
                 required
               />
             </div>
-            <div>
-              <Label>Type</Label>
-              <Select value={type} onValueChange={(v: any) => setType(v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SHARED">👥 Shared</SelectItem>
-                  <SelectItem value="PERSONAL">🔒 Personal (Admin Only)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            
+            {/* Type selection - Only show at root */}
+            {isAtRoot && (
+              <div>
+                <Label>Type</Label>
+                <Select value={type} onValueChange={(v: any) => setType(v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SHARED">👥 Shared</SelectItem>
+                    <SelectItem value="PERSONAL">🔒 Personal (Admin Only)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
+            {/* Show parent folder type info when inside a folder */}
+            {!isAtRoot && (
+              <div className="border rounded p-2 bg-blue-50 text-sm text-blue-900">
+                <p className="font-medium">
+                  {isInPersonalFolder && "🔒 Creating in Personal Folder - Subfolder will be private"}
+                  {isInSharedFolder && "👥 Creating in Shared Folder - Subfolder will inherit sharing"}
+                </p>
+              </div>
+            )}
             <div>
               <Label>Parent Folder</Label>
               {currentFolder ? (
@@ -573,7 +673,9 @@ function CreateFolderDialog({
                 </Select>
               )}
             </div>
-            {type === "SHARED" && (
+            
+            {/* User selection - Only show at root for SHARED type */}
+            {type === "SHARED" && isAtRoot && (
               <div>
                 <Label>Share with Users</Label>
                 <div className="max-h-40 overflow-y-auto border rounded p-2 space-y-2">
@@ -592,6 +694,16 @@ function CreateFolderDialog({
                       <span className="text-sm">{u.fullName} ({u.role})</span>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Show inherited users when creating inside shared folder */}
+            {isInSharedFolder && parentFolderData?.sharedWithUsers && parentFolderData.sharedWithUsers.length > 0 && (
+              <div>
+                <Label>Will be shared with (inherited from parent folder)</Label>
+                <div className="border rounded p-2 bg-gray-50 text-sm text-gray-700">
+                  {parentFolderData.sharedWithUsers.map(u => u.fullName).join(", ")}
                 </div>
               </div>
             )}

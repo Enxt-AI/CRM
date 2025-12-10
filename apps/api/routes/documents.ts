@@ -49,6 +49,35 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
       // Manager/Employee see SHARED documents they have access to:
       // 1. Documents directly shared with them, OR
       // 2. Documents in folders shared with them
+      
+      console.log(`\n========== NON-ADMIN DOCUMENT QUERY ==========`);
+      console.log(`[${role}] User ${userId} requesting documents...`);
+      
+      // First, let's see ALL shared documents to understand what's in the database
+      const allSharedDocs = await prisma.managedDocument.findMany({
+        where: { type: "SHARED" },
+        include: {
+          sharedWithUsers: { select: { id: true, fullName: true } },
+          folder: {
+            select: { 
+              id: true, 
+              name: true, 
+              type: true, 
+              sharedWithUsers: { select: { id: true, fullName: true } },
+            },
+          },
+        },
+      });
+      
+      console.log(`\nTotal SHARED documents in database: ${allSharedDocs.length}`);
+      allSharedDocs.forEach(doc => {
+        console.log(`  - "${doc.name}":`);
+        console.log(`      Directly shared with: ${doc.sharedWithUsers.map(u => u.fullName).join(", ") || "nobody"}`);
+        console.log(`      Folder: ${doc.folder?.name || "root"} (${doc.folder?.type || "N/A"})`);
+        console.log(`      Folder shared with: ${doc.folder?.sharedWithUsers?.map(u => u.fullName).join(", ") || "nobody"}`);
+      });
+      
+      // Now run the actual query
       documents = await prisma.managedDocument.findMany({
         where: {
           type: "SHARED",
@@ -78,11 +107,22 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
             select: { id: true, fullName: true },
           },
           folder: {
-            select: { id: true, name: true },
+            select: { id: true, name: true, type: true, sharedWithUsers: {
+              select: { id: true, fullName: true },
+            }},
           },
         },
         orderBy: { createdAt: "desc" },
       });
+      
+      // Detailed logging
+      console.log(`\n[${role}] Query returned ${documents.length} documents for user ${userId}`);
+      documents.forEach(doc => {
+        const directShared = doc.sharedWithUsers.some(u => u.id === userId);
+        const folderShared = doc.folder?.sharedWithUsers?.some(u => u.id === userId);
+        console.log(`  - ${doc.name}: direct=${directShared}, folder=${folderShared}, folderType=${doc.folder?.type}, folderName=${doc.folder?.name}`);
+      });
+      console.log(`==============================================\n`);
     }
 
     res.json(documents);
@@ -269,11 +309,19 @@ router.post(
 
       // Verify folder exists if provided
       if (folderId) {
-        const folder = await prisma.folder.findUnique({ where: { id: folderId } });
+        const folder = await prisma.folder.findUnique({ 
+          where: { id: folderId },
+          include: {
+            sharedWithUsers: {
+              select: { id: true, fullName: true },
+            },
+          },
+        });
         if (!folder) {
           res.status(404).json({ error: "Folder not found" });
           return;
         }
+        console.log(`Folder "${folder.name}" (type: ${folder.type}) shared with:`, folder.sharedWithUsers.map(u => u.fullName));
       }
 
       // Generate S3 key and upload
