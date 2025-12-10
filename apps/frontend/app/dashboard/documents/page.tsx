@@ -56,9 +56,6 @@ export default function DocumentsPage() {
   // Dialog states
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [viewUrl, setViewUrl] = useState<string>("");
-  const [viewFileName, setViewFileName] = useState<string>("");
 
   const isAdmin = user?.role === "ADMIN";
 
@@ -91,9 +88,8 @@ export default function DocumentsPage() {
   const handleViewDocument = async (doc: ManagedDocument) => {
     try {
       const result = await documents.getViewUrl(doc.id);
-      setViewUrl(result.url);
-      setViewFileName(doc.name);
-      setViewDialogOpen(true);
+      // Open in new tab instead of dialog
+      window.open(result.url, "_blank");
     } catch (error) {
       console.error("Failed to get view URL:", error);
       alert("Failed to load document");
@@ -311,20 +307,6 @@ export default function DocumentsPage() {
         currentFolder={selectedFolder}
         onSuccess={loadData}
       />
-
-      {/* View Document Dialog */}
-      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="max-w-4xl h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>{viewFileName}</DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-auto">
-            {viewUrl && (
-              <iframe src={viewUrl} className="w-full h-full border rounded" />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -362,6 +344,7 @@ function UploadDialog({
 
     try {
       setUploading(true);
+      console.log("Uploading document with users:", selectedUsers);
       await documents.upload({
         file,
         name: name || file.name,
@@ -389,7 +372,7 @@ function UploadDialog({
         <DialogHeader>
           <DialogTitle>Upload Document</DialogTitle>
           <DialogDescription>
-            Upload a document (max 1MB, txt/pdf/png/jpg/jpeg)
+            Upload a document (max 10MB, txt/pdf/png/jpg/jpeg)
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -425,19 +408,26 @@ function UploadDialog({
             </div>
             <div>
               <Label>Folder</Label>
-              <Select value={folderId || "none"} onValueChange={(v) => setFolderId(v === "none" ? null : v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">📁 Root</SelectItem>
-                  {folderList.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>
-                      {f.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {currentFolder ? (
+                <div className="border rounded p-2 bg-gray-50 text-sm text-gray-700">
+                  📁 {folderList.find(f => f.id === currentFolder)?.name || "Current Folder"}
+                  <p className="text-xs text-gray-500 mt-1">Document will be uploaded to this folder</p>
+                </div>
+              ) : (
+                <Select value={folderId || "none"} onValueChange={(v) => setFolderId(v === "none" ? null : v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">📁 Root</SelectItem>
+                    {folderList.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             {type === "SHARED" && (
               <div>
@@ -557,24 +547,31 @@ function CreateFolderDialog({
             </div>
             <div>
               <Label>Parent Folder</Label>
-              <Select value={parentId || "none"} onValueChange={(v) => setParentId(v === "none" ? null : v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">📁 Root</SelectItem>
-                  {folderList.filter(f => {
-                    // Don't allow more than 2 levels of nesting
-                    if (!f.parentId) return true;
-                    const parent = folderList.find(p => p.id === f.parentId);
-                    return !parent?.parentId; // Only show level 1 and 2 folders
-                  }).map((f) => (
-                    <SelectItem key={f.id} value={f.id}>
-                      {f.parentId ? "  └─ " : ""}{f.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {currentFolder ? (
+                <div className="border rounded p-2 bg-gray-50 text-sm text-gray-700">
+                  📁 {folderList.find(f => f.id === currentFolder)?.name || "Current Folder"}
+                  <p className="text-xs text-gray-500 mt-1">Subfolder will be created inside this folder</p>
+                </div>
+              ) : (
+                <Select value={parentId || "none"} onValueChange={(v) => setParentId(v === "none" ? null : v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">📁 Root</SelectItem>
+                    {folderList.filter(f => {
+                      // Don't allow more than 2 levels of nesting
+                      if (!f.parentId) return true;
+                      const parent = folderList.find(p => p.id === f.parentId);
+                      return !parent?.parentId; // Only show level 1 and 2 folders
+                    }).map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.parentId ? "  └─ " : ""}{f.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             {type === "SHARED" && (
               <div>

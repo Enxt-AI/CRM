@@ -34,6 +34,19 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+  
+  // Handle non-JSON responses (like HTML error pages)
+  const contentType = response.headers.get("content-type");
+  const isJson = contentType && contentType.includes("application/json");
+  
+  if (!isJson) {
+    if (!response.ok) {
+      throw new ApiError(response.status, `Server error: ${response.statusText}`);
+    }
+    // If it's a successful non-JSON response, return empty object
+    return {} as T;
+  }
+  
   const data = await response.json();
 
   if (!response.ok) {

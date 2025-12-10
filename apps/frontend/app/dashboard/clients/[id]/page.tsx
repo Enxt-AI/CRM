@@ -689,7 +689,7 @@ function AddDocumentDialog({
         <DialogHeader>
           <DialogTitle>Upload Document</DialogTitle>
           <DialogDescription>
-            Upload files (max 1MB, txt/pdf/png/jpg/jpeg)
+            Upload files (max 10MB, txt/pdf/png/jpg/jpeg)
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>

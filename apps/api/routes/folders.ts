@@ -73,6 +73,9 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
           createdBy: {
             select: { id: true, fullName: true },
           },
+          sharedWithUsers: {
+            select: { id: true, fullName: true },
+          },
           managedDocuments: {
             select: { id: true, name: true, fileSize: true, fileType: true },
           },
@@ -217,6 +220,9 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
         },
       },
     });
+
+    console.log(`Folder "${folder.name}" created with ${folder.sharedWithUsers.length} shared users:`,
+      folder.sharedWithUsers.map(u => u.fullName));
 
     res.status(201).json(folder);
   } catch (error) {

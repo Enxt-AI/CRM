@@ -18,7 +18,7 @@ const s3Client = new S3Client({
 });
 
 const BUCKET_NAME = process.env.S3_BUCKET_NAME || "crm-documents";
-const MAX_FILE_SIZE = 1048576; // 1MB in bytes
+const MAX_FILE_SIZE = 10485760; // 10MB in bytes
 const ALLOWED_MIME_TYPES = [
   "text/plain",
   "application/pdf",
@@ -47,7 +47,7 @@ export function validateFile(file: Express.Multer.File): { valid: boolean; error
   if (file.size > MAX_FILE_SIZE) {
     return {
       valid: false,
-      error: `File size exceeds 1MB limit. Uploaded: ${(file.size / 1024 / 1024).toFixed(2)}MB`,
+      error: `File size exceeds 10MB limit. Uploaded: ${(file.size / 1024 / 1024).toFixed(2)}MB`,
     };
   }
 

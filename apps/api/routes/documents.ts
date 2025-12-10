@@ -18,7 +18,7 @@ const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 1048576, // 1MB
+    fileSize: 10485760, // 10MB
   },
 });
 
@@ -46,16 +46,35 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
         orderBy: { createdAt: "desc" },
       });
     } else {
-      // Manager/Employee see only SHARED documents they have access to
+      // Manager/Employee see SHARED documents they have access to:
+      // 1. Documents directly shared with them, OR
+      // 2. Documents in folders shared with them
       documents = await prisma.managedDocument.findMany({
         where: {
           type: "SHARED",
-          sharedWithUsers: {
-            some: { id: userId },
-          },
+          OR: [
+            {
+              // Documents directly shared with user
+              sharedWithUsers: {
+                some: { id: userId },
+              },
+            },
+            {
+              // Documents in folders shared with user
+              folder: {
+                type: "SHARED",
+                sharedWithUsers: {
+                  some: { id: userId },
+                },
+              },
+            },
+          ],
         },
         include: {
           uploadedBy: {
+            select: { id: true, fullName: true },
+          },
+          sharedWithUsers: {
             select: { id: true, fullName: true },
           },
           folder: {
@@ -107,9 +126,22 @@ router.get("/:id", authenticate, async (req: Request, res: Response) => {
         return;
       }
 
-      // Check if user has access
-      const hasAccess = document.sharedWithUsers.some((u: any) => u.id === userId);
-      if (!hasAccess) {
+      // Check if user has access via:
+      // 1. Direct document sharing, OR
+      // 2. Folder sharing
+      const hasDirectAccess = document.sharedWithUsers.some((u: any) => u.id === userId);
+      const hasFolderAccess = document.folder && 
+        document.folder.type === "SHARED" &&
+        await prisma.folder.findFirst({
+          where: {
+            id: document.folder.id,
+            sharedWithUsers: {
+              some: { id: userId },
+            },
+          },
+        });
+      
+      if (!hasDirectAccess && !hasFolderAccess) {
         res.status(403).json({ error: "Access denied" });
         return;
       }
@@ -134,6 +166,9 @@ router.get("/:id/view", authenticate, async (req: Request, res: Response) => {
         sharedWithUsers: {
           select: { id: true },
         },
+        folder: {
+          select: { id: true, type: true },
+        },
       },
     });
 
@@ -149,8 +184,20 @@ router.get("/:id/view", authenticate, async (req: Request, res: Response) => {
         return;
       }
 
-      const hasAccess = document.sharedWithUsers.some((u: any) => u.id === userId);
-      if (!hasAccess) {
+      // Check if user has access via direct sharing OR folder sharing
+      const hasDirectAccess = document.sharedWithUsers.some((u: any) => u.id === userId);
+      const hasFolderAccess = document.folder && 
+        document.folder.type === "SHARED" &&
+        await prisma.folder.findFirst({
+          where: {
+            id: document.folder.id,
+            sharedWithUsers: {
+              some: { id: userId },
+            },
+          },
+        });
+      
+      if (!hasDirectAccess && !hasFolderAccess) {
         res.status(403).json({ error: "Access denied" });
         return;
       }
@@ -210,6 +257,7 @@ router.post(
       };
 
       console.log("Metadata:", metadata);
+      console.log("Shared with user IDs:", metadata.sharedWithUserIds);
 
       const metadataValidation = uploadDocumentSchema.safeParse(metadata);
       if (!metadataValidation.success) {
@@ -270,6 +318,9 @@ router.post(
           },
         },
       });
+
+      console.log("Document created with", document.sharedWithUsers.length, "shared users:", 
+        document.sharedWithUsers.map(u => u.fullName));
 
       res.status(201).json(document);
     } catch (error) {
