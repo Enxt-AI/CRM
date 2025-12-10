@@ -556,8 +556,8 @@ function AddDealDialog({
                   id="value"
                   type="number"
                   min="0"
-                  value={formData.value}
-                  onChange={(e) => setFormData({ ...formData, value: parseFloat(e.target.value) })}
+                  value={formData.value || ""}
+                  onChange={(e) => setFormData({ ...formData, value: e.target.value ? parseFloat(e.target.value) : 0 })}
                   required
                 />
               </div>
@@ -568,8 +568,8 @@ function AddDealDialog({
                   type="number"
                   min="0"
                   max="100"
-                  value={formData.probability}
-                  onChange={(e) => setFormData({ ...formData, probability: parseInt(e.target.value) })}
+                  value={formData.probability || ""}
+                  onChange={(e) => setFormData({ ...formData, probability: e.target.value ? parseInt(e.target.value) : 0 })}
                 />
               </div>
             </div>

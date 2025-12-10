@@ -202,6 +202,7 @@ export type Client = {
   slackChannel: string | null;
   status: ClientStatus;
   lifetimeValue: number;
+  estimatedValue: number | null;
   accountManagerId: string;
   accountManager: {
     id: string;
@@ -434,6 +435,7 @@ export type UpdateClientData = Partial<{
   slackChannel: string | null;
   status: ClientStatus;
   lifetimeValue: number;
+  estimatedValue: number | null;
 }>;
 
 export type AddDocumentData = {

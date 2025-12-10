@@ -361,7 +361,8 @@ router.post("/:id/convert", authenticate, async (req: Request, res: Response) =>
           email: lead.email,
           mobile: lead.mobile,
           status: "ACTIVE",
-          lifetimeValue: estimatedValue,
+          lifetimeValue: 0, // Lifetime value starts at 0, only increments with CLOSED_WON deals
+          estimatedValue: estimatedValue, // Store estimated value separately
           accountManagerId: lead.ownerId,
         },
       });

@@ -167,7 +167,8 @@ model Client {
   
   // Status
   status         ClientStatus @default(ACTIVE)
-  lifetimeValue  Decimal      @default(0) @db.Decimal(12, 2)
+  lifetimeValue  Decimal      @default(0) @db.Decimal(12, 2) // Sum of CLOSED_WON deals only
+  estimatedValue Decimal?     @db.Decimal(12, 2) // Estimated value from lead conversion
   
   // Ownership
   accountManagerId String

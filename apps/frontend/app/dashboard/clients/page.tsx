@@ -232,7 +232,18 @@ export default function ClientsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="font-medium text-blue-600">
-                        {formatCurrency(client.totalDealsValue || 0)}
+                        <div>
+                          {client.totalDealsValue && client.totalDealsValue > 0 ? (
+                            <span>{formatCurrency(client.totalDealsValue)}</span>
+                          ) : client.estimatedValue && client.estimatedValue > 0 ? (
+                            <div>
+                              <span>{formatCurrency(client.estimatedValue)}</span>
+                              <span className="text-xs text-neutral-500 ml-1">(Estimated)</span>
+                            </div>
+                          ) : (
+                            <span className="text-neutral-400">—</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="font-semibold text-green-600">
                         {formatCurrency(Number(client.lifetimeValue))}

@@ -33,6 +33,9 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
           },
         },
         deals: {
+          where: {
+            isDeleted: false, // Only count active (non-deleted) deals
+          },
           select: {
             id: true,
             title: true,
@@ -54,11 +57,18 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
     });
 
     // Calculate total deals value for each client
-    const clientsWithStats = clients.map((client) => ({
-      ...client,
-      totalDealsValue: client.deals.reduce((sum, deal) => sum + Number(deal.value), 0),
-      activeDealsCount: client.deals.filter((d) => d.stage !== "CLOSED_WON" && d.stage !== "CLOSED_LOST").length,
-    }));
+    const clientsWithStats = clients.map((client) => {
+      const totalDealsValue = client.deals.reduce((sum, deal) => sum + Number(deal.value), 0);
+      const activeDealsCount = client.deals.filter(
+        (d) => d.stage !== "CLOSED_WON" && d.stage !== "CLOSED_LOST"
+      ).length;
+      
+      return {
+        ...client,
+        totalDealsValue,
+        activeDealsCount,
+      };
+    });
 
     res.json({
       clients: clientsWithStats,

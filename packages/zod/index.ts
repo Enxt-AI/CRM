@@ -171,6 +171,7 @@ export const updateClientSchema = z.object({
   slackChannel: z.string().max(100).optional().nullable(),
   status: clientStatusEnum.optional(),
   lifetimeValue: z.number().min(0).optional(),
+  estimatedValue: z.number().min(0).optional().nullable(),
 });
 
 // Add document (for both leads and clients)
