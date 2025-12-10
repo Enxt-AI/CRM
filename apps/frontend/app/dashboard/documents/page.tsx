@@ -67,10 +67,10 @@ export default function DocumentsPage() {
     try {
       setLoading(true);
       
-      // Load folders and documents
-      // Non-admin users don't need folders (they see flat document list)
+      // Load folders and documents for all users
+      // Backend already filters by access permissions
       const [foldersData, docsData] = await Promise.all([
-        isAdmin ? folders.list() : Promise.resolve([]),
+        folders.list(), // Returns only accessible folders
         documents.list(),
       ]);
       setFolderList(foldersData);
@@ -120,20 +120,15 @@ export default function DocumentsPage() {
     }
   };
 
-  // Get documents in selected folder or root (ADMIN ONLY)
-  // For non-admin, show ALL documents in a flat list
-  const filteredDocuments = isAdmin
-    ? selectedFolder
-      ? documentList.filter((d) => d.folderId === selectedFolder)
-      : documentList.filter((d) => !d.folderId)
-    : documentList; // Non-admin sees all their documents
+  // Get documents in selected folder or root
+  const filteredDocuments = selectedFolder
+    ? documentList.filter((d) => d.folderId === selectedFolder)
+    : documentList.filter((d) => !d.folderId);
 
-  // Get subfolders of selected folder or root folders (ADMIN ONLY)
-  const filteredFolders = isAdmin
-    ? selectedFolder
-      ? folderList.filter((f) => f.parentId === selectedFolder)
-      : folderList.filter((f) => !f.parentId)
-    : []; // Non-admin sees no folders
+  // Get subfolders of selected folder or root folders
+  const filteredFolders = selectedFolder
+    ? folderList.filter((f) => f.parentId === selectedFolder)
+    : folderList.filter((f) => !f.parentId);
 
   const selectedFolderData = selectedFolder
     ? folderList.find((f) => f.id === selectedFolder)
@@ -184,26 +179,24 @@ export default function DocumentsPage() {
         )}
       </div>
 
-      {/* Breadcrumb - Admin Only */}
-      {isAdmin && (
-        <div className="mb-4 flex items-center gap-2 text-sm text-gray-600">
-          <button
-            onClick={() => setSelectedFolder(null)}
-            className="hover:text-blue-600 font-medium"
-          >
-            Root
-          </button>
-          {selectedFolderData && (
-            <>
-              <span>/</span>
-              <span className="text-gray-900 font-medium">{selectedFolderData.name}</span>
-            </>
-          )}
-        </div>
-      )}
+      {/* Breadcrumb - All users can see it */}
+      <div className="mb-4 flex items-center gap-2 text-sm text-gray-600">
+        <button
+          onClick={() => setSelectedFolder(null)}
+          className="hover:text-blue-600 font-medium"
+        >
+          Root
+        </button>
+        {selectedFolderData && (
+          <>
+            <span>/</span>
+            <span className="text-gray-900 font-medium">{selectedFolderData.name}</span>
+          </>
+        )}
+      </div>
 
-      {/* Folders Grid - Admin Only */}
-      {isAdmin && filteredFolders.length > 0 && (
+      {/* Folders Grid - All users can see folders */}
+      {filteredFolders.length > 0 && (
         <div className="mb-8">
           <h2 className="text-lg font-semibold mb-3">Folders</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -253,7 +246,7 @@ export default function DocumentsPage() {
           <Card>
             <CardContent className="p-8 text-center text-gray-500">
               <FileIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>{isAdmin ? "No documents in this folder" : "No documents shared with you"}</p>
+              <p>No documents in this folder</p>
             </CardContent>
           </Card>
         ) : (
@@ -266,11 +259,6 @@ export default function DocumentsPage() {
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold truncate">{doc.name}</h3>
                       <p className="text-xs text-gray-500">{formatFileSize(doc.fileSize)}</p>
-                      {!isAdmin && doc.folder && (
-                        <p className="text-xs text-gray-400 mt-1">
-                          📁 {doc.folder.name}
-                        </p>
-                      )}
                       <p className="text-xs text-gray-400 mt-1">
                         {doc.type === "PERSONAL" ? "🔒 Personal" : "👥 Shared"}
                       </p>
