@@ -239,3 +239,55 @@ export const restoreDealSchema = z.object({});
 export const dealStageEnum = z.enum(["QUALIFICATION", "NEEDS_ANALYSIS", "VALUE_PROPOSITION", "PROPOSAL_PRICE_QUOTE", "NEGOTIATION", "CLOSED_WON", "CLOSED_LOST"]);
 
 export type DealStage = z.infer<typeof dealStageEnum>;
+
+// ================================
+// DOCUMENT MANAGEMENT SCHEMAS
+// ================================
+
+export const folderTypeEnum = z.enum(["SHARED", "PERSONAL"]);
+export const documentTypeEnum = z.enum(["SHARED", "PERSONAL"]);
+
+// Allowed file types (txt, pdf, png, jpeg, jpg)
+export const ALLOWED_FILE_TYPES = [
+  "text/plain",
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+];
+
+export const MAX_FILE_SIZE = 1048576; // 1MB in bytes
+
+// Create folder
+export const createFolderSchema = z.object({
+  name: z.string().min(1, "Folder name is required").max(100),
+  type: folderTypeEnum.default("SHARED"),
+  parentId: z.string().uuid().optional().nullable(),
+  sharedWithUserIds: z.array(z.string().uuid()).optional().default([]),
+});
+
+// Update folder (rename)
+export const updateFolderSchema = z.object({
+  name: z.string().min(1, "Folder name is required").max(100).optional(),
+  sharedWithUserIds: z.array(z.string().uuid()).optional(),
+});
+
+// Upload document metadata (file handled separately via multipart)
+export const uploadDocumentSchema = z.object({
+  name: z.string().min(1).max(255), // Filename
+  type: documentTypeEnum.default("SHARED"),
+  folderId: z.string().uuid().optional().nullable(),
+  sharedWithUserIds: z.array(z.string().uuid()).optional().default([]),
+});
+
+// Update document
+export const updateDocumentSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  sharedWithUserIds: z.array(z.string().uuid()).optional(),
+});
+
+export type FolderType = z.infer<typeof folderTypeEnum>;
+export type DocumentType = z.infer<typeof documentTypeEnum>;
+export type CreateFolderInput = z.infer<typeof createFolderSchema>;
+export type UpdateFolderInput = z.infer<typeof updateFolderSchema>;
+export type UploadDocumentInput = z.infer<typeof uploadDocumentSchema>;
+export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;

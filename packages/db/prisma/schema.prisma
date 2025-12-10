@@ -31,6 +31,12 @@ model User {
   meetings       Meeting[] @relation("MeetingOrganizer")
   activities     Activity[] @relation("ActivityCreator")
   notes          Note[]    @relation("NoteAuthor")
+  
+  // Document Management Relations
+  createdFolders       Folder[]          @relation("FolderCreator")
+  uploadedDocuments    ManagedDocument[] @relation("DocumentUploader")
+  sharedFolders        Folder[]          @relation("SharedFolders")
+  sharedDocuments      ManagedDocument[] @relation("SharedDocuments")
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -466,4 +472,71 @@ model Note {
   @@index([leadId, createdAt])
   @@index([clientId, createdAt])
   @@index([isPinned])
+}
+
+// DOCUMENT MANAGEMENT
+model Folder {
+  id          String     @id @default(uuid())
+  name        String
+  type        FolderType @default(SHARED)
+
+  // Nested folder hierarchy (max 3 levels)
+  parentId    String?
+  parent      Folder?    @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Folder[]   @relation("FolderHierarchy")
+  
+  // Documents in this folder
+  managedDocuments ManagedDocument[]
+  
+  // Access control - shared folders can be viewed by selected users
+  sharedWithUsers User[]  @relation("SharedFolders")
+  
+  // Creator (admin)
+  createdById String
+  createdBy   User       @relation("FolderCreator", fields: [createdById], references: [id])
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  @@index([parentId])
+  @@index([type])
+  @@index([createdById])
+}
+
+enum FolderType {
+  SHARED    // Shared with selected users (managers/employees can view)
+  PERSONAL  // Personal employee docs (admin-only view)
+}
+
+model ManagedDocument {
+  id          String       @id @default(uuid())
+  name        String       // Original filename with extension
+  s3Key       String       @unique // S3 object key (unique identifier)
+  fileType    String       // MIME type (application/pdf, image/png, etc.)
+  fileSize    Int          // Size in bytes (max 1MB = 1048576 bytes)
+  type        DocumentType @default(SHARED)
+  
+  // Folder organization
+  folderId    String?
+  folder      Folder?      @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  
+  // Access control - shared documents can be viewed by selected users
+  sharedWithUsers User[]   @relation("SharedDocuments")
+  
+  // Uploader (admin)
+  uploadedById String
+  uploadedBy   User         @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  
+  @@index([folderId])
+  @@index([type])
+  @@index([uploadedById])
+  @@index([s3Key])
+}
+
+enum DocumentType {
+  SHARED    // Shared with selected users
+  PERSONAL  // Personal employee docs (admin-only view)
 }

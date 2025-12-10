@@ -497,6 +497,30 @@ export const clients = {
     }),
 
   // Documents
+  uploadDocument: async (clientId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`${API_BASE_URL}/clients/${clientId}/documents/upload`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new ApiError(response.status, result.error || "Upload failed", result.details);
+    }
+
+    return result as Document;
+  },
+
+  getDocumentViewUrl: (clientId: string, documentId: string) =>
+    request<{ url: string; fileName: string; fileType: string; expiresIn?: number }>(
+      `/clients/${clientId}/documents/${documentId}/view`
+    ),
+
   addDocument: (clientId: string, data: AddDocumentData) =>
     request<{ message: string; document: Document }>(`/clients/${clientId}/documents`, {
       method: "POST",
@@ -578,4 +602,172 @@ export const deals = {
 };
 
 export { ApiError };
+
+// DOCUMENT MANAGEMENT TYPES
+
+export type FolderType = "SHARED" | "PERSONAL";
+export type DocumentType = "SHARED" | "PERSONAL";
+
+export type SimpleUser = {
+  id: string;
+  fullName: string;
+  username?: string;
+};
+
+export type Folder = {
+  id: string;
+  name: string;
+  type: FolderType;
+  parentId: string | null;
+  parent?: {
+    id: string;
+    name: string;
+  };
+  children?: {
+    id: string;
+    name: string;
+    type: FolderType;
+  }[];
+  managedDocuments?: {
+    id: string;
+    name: string;
+    fileSize: number;
+    fileType: string;
+  }[];
+  createdBy: SimpleUser;
+  sharedWithUsers?: SimpleUser[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ManagedDocument = {
+  id: string;
+  name: string;
+  s3Key: string;
+  fileType: string;
+  fileSize: number;
+  type: DocumentType;
+  folderId: string | null;
+  folder?: {
+    id: string;
+    name: string;
+    type: FolderType;
+  };
+  uploadedBy: SimpleUser;
+  sharedWithUsers?: SimpleUser[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateFolderData = {
+  name: string;
+  type: FolderType;
+  parentId?: string | null;
+  sharedWithUserIds?: string[];
+};
+
+export type UpdateFolderData = {
+  name?: string;
+  sharedWithUserIds?: string[];
+};
+
+export type UploadDocumentData = {
+  file: File;
+  name?: string;
+  type: DocumentType;
+  folderId?: string | null;
+  sharedWithUserIds?: string[];
+};
+
+export type UpdateDocumentData = {
+  name?: string;
+  sharedWithUserIds?: string[];
+};
+
+// DOCUMENT MANAGEMENT API
+
+export const folders = {
+  list: () =>
+    request<Folder[]>("/folders"),
+
+  get: (id: string) =>
+    request<Folder>(`/folders/${id}`),
+
+  create: (data: CreateFolderData) =>
+    request<Folder>("/folders", {
+      method: "POST",
+      body: data,
+    }),
+
+  update: (id: string, data: UpdateFolderData) =>
+    request<Folder>(`/folders/${id}`, {
+      method: "PATCH",
+      body: data,
+    }),
+
+  delete: (id: string) =>
+    request<{ message: string; documentsDeleted: number }>(`/folders/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+export const documents = {
+  list: () =>
+    request<ManagedDocument[]>("/documents"),
+
+  get: (id: string) =>
+    request<ManagedDocument>(`/documents/${id}`),
+
+  getViewUrl: (id: string) =>
+    request<{ url: string; fileName: string; fileType: string; expiresIn: number }>(
+      `/documents/${id}/view`
+    ),
+
+  upload: async (data: UploadDocumentData) => {
+    const formData = new FormData();
+    formData.append("file", data.file);
+    formData.append("name", data.name || data.file.name);
+    formData.append("type", data.type);
+    if (data.folderId) {
+      formData.append("folderId", data.folderId);
+    }
+    if (data.sharedWithUserIds?.length) {
+      formData.append("sharedWithUserIds", JSON.stringify(data.sharedWithUserIds));
+    }
+
+    const response = await fetch(`${API_BASE_URL}/documents/upload`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new ApiError(response.status, result.error || "Upload failed", result.details);
+    }
+
+    return result as ManagedDocument;
+  },
+
+  update: (id: string, data: UpdateDocumentData) =>
+    request<ManagedDocument>(`/documents/${id}`, {
+      method: "PATCH",
+      body: data,
+    }),
+
+  delete: (id: string) =>
+    request<{ message: string; fileName: string }>(`/documents/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// ================================
+// USERS API
+// ================================
+
+export const users = {
+  list: () =>
+    request<{ users: User[]; total: number }>("/users"),
+};
 

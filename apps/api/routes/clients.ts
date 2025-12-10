@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import prisma from "@db/client";
 import { authenticate } from "../middleware/auth";
+import multer from "multer";
 import {
   updateClientSchema,
   addDocumentSchema,
@@ -11,8 +12,23 @@ import {
   addDealSchema,
   updateDealSchema,
 } from "@repo/zod";
+import {
+  validateFile,
+  generateS3Key,
+  uploadToS3,
+  deleteFromS3,
+  getPresignedViewUrl,
+} from "../lib/s3";
 
 const router = Router();
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 1048576, // 1MB
+  },
+});
 
 // GET /clients - List all clients
 router.get("/", authenticate, async (req: Request, res: Response) => {
@@ -616,36 +632,159 @@ router.patch("/:clientId/deals/:dealId", authenticate, async (req: Request, res:
   }
 });
 
-// DELETE /clients/:clientId/documents/:documentId - Delete document
-router.delete("/:clientId/documents/:documentId", authenticate, async (req: Request, res: Response) => {
-  try {
-    const { clientId, documentId } = req.params;
-    const { role, userId } = req.user!;
+// POST /clients/:clientId/documents/upload - Upload document to client (S3)
+router.post(
+  "/:clientId/documents/upload",
+  authenticate,
+  upload.single("file"),
+  async (req: Request, res: Response) => {
+    try {
+      const { clientId } = req.params;
+      const { role, userId } = req.user!;
 
-    const document = await prisma.document.findUnique({
-      where: { id: documentId },
-      include: { client: true },
-    });
+      // Check client exists and access
+      const client = await prisma.client.findUnique({ where: { id: clientId } });
+      if (!client) {
+        res.status(404).json({ error: "Client not found" });
+        return;
+      }
 
-    if (!document || document.clientId !== clientId) {
-      res.status(404).json({ error: "Document not found" });
-      return;
+      if (role === "EMPLOYEE" && client.accountManagerId !== userId) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+
+      if (!req.file) {
+        res.status(400).json({ error: "No file provided" });
+        return;
+      }
+
+      // Validate file
+      const validation = validateFile(req.file);
+      if (!validation.valid) {
+        res.status(400).json({ error: validation.error });
+        return;
+      }
+
+      // Upload to S3 with client-specific path
+      const s3Key = generateS3Key(req.file.originalname, `clients/${clientId}`);
+      const uploadResult = await uploadToS3(req.file, s3Key);
+
+      if (!uploadResult.success) {
+        res.status(500).json({ error: uploadResult.error });
+        return;
+      }
+
+      // Save to database
+      const document = await prisma.document.create({
+        data: {
+          name: req.file.originalname,
+          url: s3Key, // Store S3 key in URL field
+          fileType: req.file.mimetype,
+          fileSize: req.file.size,
+          isLink: false,
+          category: req.body.category || "General",
+          clientId,
+        },
+      });
+
+      res.status(201).json(document);
+    } catch (error) {
+      console.error("Upload document error:", error);
+      res.status(500).json({ error: "Failed to upload document" });
     }
-
-    if (role === "EMPLOYEE" && document.client!.accountManagerId !== userId) {
-      res.status(403).json({ error: "Access denied" });
-      return;
-    }
-
-    // TODO: If S3 file, delete from S3 first
-
-    await prisma.document.delete({ where: { id: documentId } });
-
-    res.json({ message: "Document deleted successfully" });
-  } catch (error) {
-    console.error("Delete document error:", error);
-    res.status(500).json({ error: "Internal server error" });
   }
-});
+);
+
+// GET /clients/:clientId/documents/:documentId/view - Get presigned URL for viewing
+router.get(
+  "/:clientId/documents/:documentId/view",
+  authenticate,
+  async (req: Request, res: Response) => {
+    try {
+      const { clientId, documentId } = req.params;
+      const { role, userId } = req.user!;
+
+      const document = await prisma.document.findUnique({
+        where: { id: documentId },
+        include: { client: true },
+      });
+
+      if (!document || document.clientId !== clientId) {
+        res.status(404).json({ error: "Document not found" });
+        return;
+      }
+
+      if (role === "EMPLOYEE" && document.client!.accountManagerId !== userId) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+
+      // Generate presigned URL for S3 files
+      if (!document.isLink) {
+        const viewUrl = await getPresignedViewUrl(document.url, 3600);
+        res.json({
+          url: viewUrl,
+          fileName: document.name,
+          fileType: document.fileType,
+          expiresIn: 3600,
+        });
+      } else {
+        // For external links, just return the URL
+        res.json({
+          url: document.url,
+          fileName: document.name,
+          fileType: document.fileType,
+        });
+      }
+    } catch (error) {
+      console.error("Get view URL error:", error);
+      res.status(500).json({ error: "Failed to generate view URL" });
+    }
+  }
+);
+
+// DELETE /clients/:clientId/documents/:documentId - Delete document
+router.delete(
+  "/:clientId/documents/:documentId",
+  authenticate,
+  async (req: Request, res: Response) => {
+    try {
+      const { clientId, documentId } = req.params;
+      const { role, userId } = req.user!;
+
+      const document = await prisma.document.findUnique({
+        where: { id: documentId },
+        include: { client: true },
+      });
+
+      if (!document || document.clientId !== clientId) {
+        res.status(404).json({ error: "Document not found" });
+        return;
+      }
+
+      if (role === "EMPLOYEE" && document.client!.accountManagerId !== userId) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+
+      // Delete from S3 if it's an uploaded file (not a link)
+      if (!document.isLink && document.url) {
+        const s3DeleteResult = await deleteFromS3(document.url);
+        if (!s3DeleteResult.success) {
+          console.error("S3 deletion failed:", s3DeleteResult.error);
+          // Continue with database deletion even if S3 fails
+        }
+      }
+
+      await prisma.document.delete({ where: { id: documentId } });
+
+      res.json({ message: "Document deleted successfully" });
+    } catch (error) {
+      console.error("Delete document error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
 
 export default router;

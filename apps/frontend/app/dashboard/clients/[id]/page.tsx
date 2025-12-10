@@ -78,6 +78,7 @@ export default function ClientDetailPage() {
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
 
   const fetchClient = useCallback(async () => {
     try {
@@ -339,27 +340,56 @@ export default function ClientDetailPage() {
               {client.documents && client.documents.length > 0 ? (
                 <div className="space-y-2">
                   {client.documents.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between p-2 border rounded hover:bg-neutral-50">
-                      <div className="flex items-center gap-2">
+                    <div key={doc.id} className="flex items-center justify-between p-3 border rounded hover:bg-neutral-50">
+                      <div className="flex items-center gap-3">
                         <span className="text-2xl">
-                          {doc.isLink ? "🔗" : doc.fileType.includes("pdf") ? "📄" : "🖼️"}
+                          {doc.isLink ? "🔗" : doc.fileType.includes("pdf") ? "📄" : doc.fileType.includes("image") ? "🖼️" : "📁"}
                         </span>
                         <div>
                           <div className="text-sm font-medium">{doc.name}</div>
-                          {doc.category && (
-                            <div className="text-xs text-neutral-500">{doc.category}</div>
+                          {doc.fileSize && (
+                            <div className="text-xs text-neutral-500">
+                              {(doc.fileSize / 1024).toFixed(1)} KB
+                            </div>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <a
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:underline"
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            try {
+                              if (doc.isLink) {
+                                window.open(doc.url, "_blank");
+                              } else {
+                                const { url } = await clientsApi.getDocumentViewUrl(clientId, doc.id);
+                                window.open(url, "_blank");
+                              }
+                            } catch (error) {
+                              toast.error("Failed to load document");
+                            }
+                          }}
                         >
                           View
-                        </a>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={async () => {
+                            if (confirm("Delete this document?")) {
+                              try {
+                                await clientsApi.deleteDocument(clientId, doc.id);
+                                toast.success("Document deleted");
+                                fetchClient();
+                              } catch (error) {
+                                toast.error("Failed to delete document");
+                              }
+                            }
+                          }}
+                        >
+                          🗑️
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -630,23 +660,24 @@ function AddDocumentDialog({
   onSuccess: () => void;
 }) {
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<AddDocumentData>({
-    name: "",
-    isLink: true,
-    url: "",
-  });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedFile) {
+      toast.error("Please select a file");
+      return;
+    }
+
     setLoading(true);
     try {
-      await clientsApi.addDocument(clientId, formData);
-      toast.success("Document added successfully");
+      await clientsApi.uploadDocument(clientId, selectedFile);
+      toast.success("Document uploaded successfully");
       onOpenChange(false);
       onSuccess();
-      setFormData({ name: "", isLink: true, url: "" });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to add document");
+      setSelectedFile(null);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to upload document");
     } finally {
       setLoading(false);
     }
@@ -656,54 +687,37 @@ function AddDocumentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Add Document</DialogTitle>
+          <DialogTitle>Upload Document</DialogTitle>
           <DialogDescription>
-            Add a link to a document (S3 upload coming soon)
+            Upload files (max 1MB, txt/pdf/png/jpg/jpeg)
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="doc-name">
-                Document Name <span className="text-red-500">*</span>
+              <Label htmlFor="doc-file">
+                Select File <span className="text-red-500">*</span>
               </Label>
               <Input
-                id="doc-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Contract 2025"
+                id="doc-file"
+                type="file"
+                accept=".txt,.pdf,.png,.jpg,.jpeg"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                 required
               />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="doc-url">
-                Document URL <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="doc-url"
-                type="url"
-                value={formData.url}
-                onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                placeholder="https://..."
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="doc-category">Category</Label>
-              <Input
-                id="doc-category"
-                value={formData.category || ""}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                placeholder="Contract, Proposal, etc."
-              />
+              {selectedFile && (
+                <div className="text-sm text-neutral-600">
+                  Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Adding..." : "Add Document"}
+            <Button type="submit" disabled={loading || !selectedFile}>
+              {loading ? "Uploading..." : "Upload"}
             </Button>
           </DialogFooter>
         </form>
