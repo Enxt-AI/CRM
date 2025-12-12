@@ -310,23 +310,7 @@ export type Document = {
   uploadedAt: string;
 };
 
-export type Task = {
-  id: string;
-  title: string;
-  description: string | null;
-  priority: Priority;
-  type: TaskType;
-  isCompleted: boolean;
-  completedAt: string | null;
-  assignedToId: string;
-  assignedTo: {
-    id: string;
-    fullName: string;
-  };
-  dueDate: string;
-  createdAt: string;
-  updatedAt: string;
-};
+// ... existing code ...
 
 export type TaskType = "GENERAL" | "CALL" | "EMAIL" | "FOLLOW_UP" | "PROPOSAL" | "CONTRACT";
 
@@ -782,5 +766,92 @@ export const documents = {
 export const users = {
   list: () =>
     request<{ users: User[]; total: number }>("/users"),
+};
+
+// ================================
+// TASKS API
+// ================================
+
+export type Task = {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  type: "GENERAL" | "CALL" | "EMAIL" | "FOLLOW_UP" | "PROPOSAL" | "CONTRACT";
+  isCompleted: boolean;
+  completedAt: string | null;
+  dueDate: string;
+  clientId: string | null;
+  client: { id: string; companyName: string } | null;
+  leadId: string | null;
+  lead: { id: string; name: string } | null;
+  assignedToId: string;
+  assignedTo: { id: string; fullName: string };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FollowUp = {
+  id: string;
+  name: string;
+  companyName: string | null;
+  nextFollowUpAt: string;
+  pipelineStage: string;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  owner: { id: string; fullName: string };
+};
+
+export const tasks = {
+  list: () => request<{ tasks: Task[] }>("/tasks"),
+  
+  stats: () =>
+    request<{
+      dueToday: number;
+      upcoming: number;
+      expired: number;
+      completed: number;
+    }>("/tasks/stats"),
+  
+  create: (data: {
+    title: string;
+    description?: string;
+    priority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+    type?: "GENERAL" | "CALL" | "EMAIL" | "FOLLOW_UP" | "PROPOSAL" | "CONTRACT";
+    dueDate: string;
+    assignedToId?: string;
+    clientId?: string;
+    leadId?: string;
+  }) =>
+    request<{ task: Task }>("/tasks", {
+      method: "POST",
+      body: data,
+    }),
+  
+  toggleComplete: (id: string) =>
+    request<{ task: Task }>(`/tasks/${id}/complete`, {
+      method: "PATCH",
+    }),
+  
+  delete: (id: string) =>
+    request<{ message: string }>(`/tasks/${id}`, {
+      method: "DELETE",
+    }),
+  
+  cleanupCompleted: () =>
+    request<{ message: string; count: number }>("/tasks/cleanup-completed", {
+      method: "POST",
+    }),
+  
+  followUps: {
+    list: () => request<{ followUps: FollowUp[] }>("/tasks/follow-ups"),
+    
+    stats: () =>
+      request<{
+        dueToday: number;
+        upcoming: number;
+        overdue: number;
+      }>("/tasks/follow-ups/stats"),
+    delete: (leadId: string) => request<{ message: string }>(`/tasks/follow-ups/${leadId}`, { method: "PATCH" }),
+  },
 };
 

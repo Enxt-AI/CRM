@@ -8,6 +8,7 @@ import dealsRouter from "./routes/deals";
 import foldersRouter from "./routes/folders";
 import documentsRouter from "./routes/documents";
 import usersRouter from "./routes/users";
+import tasksRouter from "./routes/tasks";
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use("/deals", dealsRouter);
 app.use("/folders", foldersRouter);
 app.use("/documents", documentsRouter);
 app.use("/users", usersRouter);
+app.use("/tasks", tasksRouter);
 
 // Health check
 app.get("/health", (_req, res) => {
