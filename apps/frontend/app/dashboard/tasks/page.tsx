@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { tasks, type Task, type FollowUp } from "@/lib/api";
+import { tasks, clients as clientsApi, type Task, type FollowUp, type Client } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,14 +19,23 @@ export default function TasksPage() {
   const [followUpStats, setFollowUpStats] = useState({ dueToday: 0, upcoming: 0, overdue: 0 });
   const [loading, setLoading] = useState(true);
   const [showAddTask, setShowAddTask] = useState(false);
+  const [showAddFollowUp, setShowAddFollowUp] = useState(false);
+  const [clientsList, setClientsList] = useState<Client[]>([]);
 
   // Form state
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("MEDIUM");
 
+  // Follow-up form state
+  const [followUpTitle, setFollowUpTitle] = useState("");
+  const [followUpDate, setFollowUpDate] = useState("");
+  const [followUpClient, setFollowUpClient] = useState("");
+  const [followUpPriority, setFollowUpPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("MEDIUM");
+
   useEffect(() => {
     loadData();
+    loadClients();
   }, []);
 
   const loadData = async () => {
@@ -47,6 +56,15 @@ export default function TasksPage() {
       toast.error("Failed to load tasks");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadClients = async () => {
+    try {
+      const data = await clientsApi.list();
+      setClientsList(data.clients);
+    } catch (error) {
+      console.error("Failed to load clients:", error);
     }
   };
 
@@ -97,6 +115,33 @@ export default function TasksPage() {
     }
   };
 
+  const handleAddFollowUp = async () => {
+    if (!followUpTitle.trim() || !followUpDate || !followUpClient) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      await tasks.create({
+        title: followUpTitle,
+        dueDate: new Date(followUpDate).toISOString(),
+        priority: followUpPriority,
+        type: "FOLLOW_UP",
+        clientId: followUpClient,
+      });
+      toast.success("Follow-up created successfully");
+      setShowAddFollowUp(false);
+      setFollowUpTitle("");
+      setFollowUpDate("");
+      setFollowUpClient("");
+      setFollowUpPriority("MEDIUM");
+      loadData();
+    } catch (error) {
+      console.error("Failed to create follow-up:", error);
+      toast.error("Failed to create follow-up");
+    }
+  };
+
   const handleDeleteFollowUp = async (leadId: string) => {
     if (!confirm("Clear this follow-up? The lead will no longer appear in the follow-ups list.")) return;
 
@@ -110,50 +155,77 @@ export default function TasksPage() {
     }
   };
 
-  // Filter tasks by status
+  // Filter tasks by status (exclude FOLLOW_UP type tasks)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
   const dueTodayTasks = taskList.filter((task) => {
+    if (task.type === "FOLLOW_UP") return false; // Exclude follow-ups from tasks
     const taskDate = new Date(task.dueDate);
     taskDate.setHours(0, 0, 0, 0);
     return !task.isCompleted && taskDate.getTime() === today.getTime();
   });
 
   const upcomingTasks = taskList.filter((task) => {
+    if (task.type === "FOLLOW_UP") return false; // Exclude follow-ups from tasks
     const taskDate = new Date(task.dueDate);
     taskDate.setHours(0, 0, 0, 0);
     return !task.isCompleted && taskDate.getTime() > today.getTime();
   });
 
   const expiredTasks = taskList.filter((task) => {
+    if (task.type === "FOLLOW_UP") return false; // Exclude follow-ups from tasks
     const taskDate = new Date(task.dueDate);
     taskDate.setHours(0, 0, 0, 0);
     return !task.isCompleted && taskDate.getTime() < today.getTime();
   });
 
-  const completedTasks = taskList.filter((task) => task.isCompleted);
+  const completedTasks = taskList.filter((task) => task.type !== "FOLLOW_UP" && task.isCompleted);
 
-  // Filter follow-ups
-  const dueTodayFollowUps = followUpList.filter((followUp) => {
-    const followUpDate = new Date(followUp.nextFollowUpAt);
-    followUpDate.setHours(0, 0, 0, 0);
-    return followUpDate.getTime() === today.getTime();
-  });
+  // Get client follow-ups from tasks with type FOLLOW_UP
+  const clientFollowUpTasks = taskList.filter((task) => task.type === "FOLLOW_UP" && !task.isCompleted);
 
-  const upcomingFollowUps = followUpList.filter((followUp) => {
-    const followUpDate = new Date(followUp.nextFollowUpAt);
-    followUpDate.setHours(0, 0, 0, 0);
-    return followUpDate.getTime() > today.getTime();
-  });
+  // Filter follow-ups (lead follow-ups + client follow-up tasks)
+  const dueTodayFollowUps = [
+    ...followUpList.filter((followUp) => {
+      const followUpDate = new Date(followUp.nextFollowUpAt);
+      followUpDate.setHours(0, 0, 0, 0);
+      return followUpDate.getTime() === today.getTime();
+    }),
+    ...clientFollowUpTasks.filter((task) => {
+      const taskDate = new Date(task.dueDate);
+      taskDate.setHours(0, 0, 0, 0);
+      return taskDate.getTime() === today.getTime();
+    }),
+  ];
 
-  const overdueFollowUps = followUpList.filter((followUp) => {
-    const followUpDate = new Date(followUp.nextFollowUpAt);
-    followUpDate.setHours(0, 0, 0, 0);
-    return followUpDate.getTime() < today.getTime();
-  });
+  const upcomingFollowUps = [
+    ...followUpList.filter((followUp) => {
+      const followUpDate = new Date(followUp.nextFollowUpAt);
+      followUpDate.setHours(0, 0, 0, 0);
+      return followUpDate.getTime() > today.getTime();
+    }),
+    ...clientFollowUpTasks.filter((task) => {
+      const taskDate = new Date(task.dueDate);
+      taskDate.setHours(0, 0, 0, 0);
+      return taskDate.getTime() > today.getTime();
+    }),
+  ];
+
+  const overdueFollowUps = [
+    ...followUpList.filter((followUp) => {
+      const followUpDate = new Date(followUp.nextFollowUpAt);
+      followUpDate.setHours(0, 0, 0, 0);
+      return followUpDate.getTime() < today.getTime();
+    }),
+    ...clientFollowUpTasks.filter((task) => {
+      const taskDate = new Date(task.dueDate);
+      taskDate.setHours(0, 0, 0, 0);
+      return taskDate.getTime() < today.getTime();
+    }),
+  ];
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -242,6 +314,69 @@ export default function TasksPage() {
               </div>
             </DialogContent>
           </Dialog>
+
+          <Dialog open={showAddFollowUp} onOpenChange={setShowAddFollowUp}>
+            <DialogTrigger asChild>
+              <Button variant="outline">+ Add Follow-up</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Client Follow-up</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <Label htmlFor="followUpClient">Client *</Label>
+                  <Select value={followUpClient} onValueChange={setFollowUpClient}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clientsList.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.companyName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="followUpTitle">Title *</Label>
+                  <Input
+                    id="followUpTitle"
+                    value={followUpTitle}
+                    onChange={(e) => setFollowUpTitle(e.target.value)}
+                    placeholder="Follow-up title"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="followUpDate">Follow-up Date *</Label>
+                  <Input
+                    id="followUpDate"
+                    type="date"
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="followUpPriority">Priority</Label>
+                  <Select value={followUpPriority} onValueChange={(v: any) => setFollowUpPriority(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LOW">Low</SelectItem>
+                      <SelectItem value="MEDIUM">Medium</SelectItem>
+                      <SelectItem value="HIGH">High</SelectItem>
+                      <SelectItem value="URGENT">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={handleAddFollowUp} className="w-full">
+                  Create Follow-up
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -268,9 +403,47 @@ export default function TasksPage() {
                 />
               ))}
               {/* Follow-ups Due Today */}
-              {dueTodayFollowUps.map((followUp) => (
-                <FollowUpItem key={followUp.id} followUp={followUp} formatDate={formatDate} getPriorityColor={getPriorityColor} onDelete={handleDeleteFollowUp} />
-              ))}
+              {dueTodayFollowUps.map((item) => {
+                // Check if it's a Task (client follow-up) or FollowUp (lead follow-up)
+                const isTask = 'dueDate' in item;
+                if (isTask) {
+                  // Render as task follow-up
+                  const task = item as Task;
+                  return (
+                    <div key={task.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border hover:shadow-md transition-shadow">
+                      <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold">
+                        📞
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{task.title}</span>
+                          {task.client && (
+                            <span className="text-sm text-gray-500">@ {task.client.companyName}</span>
+                          )}
+                          <span className={`text-xs px-2 py-1 rounded-full ${getPriorityColor(task.priority)}`}>
+                            {task.priority}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Follow-up: {formatDate(task.dueDate)}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteTask(task.id)}
+                        className="text-red-600 hover:text-red-800 text-sm font-medium ml-2"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  );
+                } else {
+                  // Render as lead follow-up
+                  const followUp = item as FollowUp;
+                  return (
+                    <FollowUpItem key={followUp.id} followUp={followUp} formatDate={formatDate} getPriorityColor={getPriorityColor} onDelete={handleDeleteFollowUp} />
+                  );
+                }
+              })}
             </div>
           </CardContent>
         </Card>
@@ -307,9 +480,44 @@ export default function TasksPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {upcomingFollowUps.map((followUp) => (
-                <FollowUpItem key={followUp.id} followUp={followUp} formatDate={formatDate} getPriorityColor={getPriorityColor} onDelete={handleDeleteFollowUp} />
-              ))}
+              {upcomingFollowUps.map((item) => {
+                const isTask = 'dueDate' in item;
+                if (isTask) {
+                  const task = item as Task;
+                  return (
+                    <div key={task.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border hover:shadow-md transition-shadow">
+                      <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold">
+                        📞
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{task.title}</span>
+                          {task.client && (
+                            <span className="text-sm text-gray-500">@ {task.client.companyName}</span>
+                          )}
+                          <span className={`text-xs px-2 py-1 rounded-full ${getPriorityColor(task.priority)}`}>
+                            {task.priority}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Follow-up: {formatDate(task.dueDate)}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteTask(task.id)}
+                        className="text-red-600 hover:text-red-800 text-sm font-medium ml-2"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  );
+                } else {
+                  const followUp = item as FollowUp;
+                  return (
+                    <FollowUpItem key={followUp.id} followUp={followUp} formatDate={formatDate} getPriorityColor={getPriorityColor} onDelete={handleDeleteFollowUp} />
+                  );
+                }
+              })}
             </div>
           </CardContent>
         </Card>
@@ -347,9 +555,45 @@ export default function TasksPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {overdueFollowUps.map((followUp) => (
-                <FollowUpItem key={followUp.id} followUp={followUp} formatDate={formatDate} getPriorityColor={getPriorityColor} isOverdue onDelete={handleDeleteFollowUp} />
-              ))}
+              {overdueFollowUps.map((item) => {
+                const isTask = 'dueDate' in item;
+                if (isTask) {
+                  const task = item as Task;
+                  return (
+                    <div key={task.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border hover:shadow-md transition-shadow">
+                      <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center text-red-600 font-semibold">
+                        📞
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{task.title}</span>
+                          {task.client && (
+                            <span className="text-sm text-gray-500">@ {task.client.companyName}</span>
+                          )}
+                          <span className={`text-xs px-2 py-1 rounded-full ${getPriorityColor(task.priority)}`}>
+                            {task.priority}
+                          </span>
+                          <span className="text-xs text-red-600 font-semibold">OVERDUE</span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Follow-up: {formatDate(task.dueDate)}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteTask(task.id)}
+                        className="text-red-600 hover:text-red-800 text-sm font-medium ml-2"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  );
+                } else {
+                  const followUp = item as FollowUp;
+                  return (
+                    <FollowUpItem key={followUp.id} followUp={followUp} formatDate={formatDate} getPriorityColor={getPriorityColor} isOverdue onDelete={handleDeleteFollowUp} />
+                  );
+                }
+              })}
             </div>
           </CardContent>
         </Card>

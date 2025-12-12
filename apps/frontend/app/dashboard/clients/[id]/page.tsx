@@ -789,6 +789,42 @@ function AddTaskDialog({
                 required
               />
             </div>
+            <div className="grid gap-2">
+              <Label>Priority</Label>
+              <Select
+                value={formData.priority}
+                onValueChange={(v: any) => setFormData({ ...formData, priority: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="URGENT">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Type</Label>
+              <Select
+                value={formData.type}
+                onValueChange={(v: any) => setFormData({ ...formData, type: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="GENERAL">General</SelectItem>
+                  <SelectItem value="CALL">Call</SelectItem>
+                  <SelectItem value="EMAIL">Email</SelectItem>
+                  <SelectItem value="FOLLOW_UP">Follow-up</SelectItem>
+                  <SelectItem value="PROPOSAL">Proposal</SelectItem>
+                  <SelectItem value="CONTRACT">Contract</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
