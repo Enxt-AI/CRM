@@ -120,9 +120,23 @@ export default function ClientDetailPage() {
     return new Date(dateString).toLocaleString("en-US", {
       month: "short",
       day: "numeric",
+      year: "numeric",
       hour: "numeric",
       minute: "2-digit",
     });
+  };
+
+  const handleDeleteExternalLink = async (linkId: string) => {
+    if (!confirm("Delete this external link?")) return;
+
+    try {
+      await clientsApi.deleteExternalLink(clientId, linkId);
+      toast.success("External link deleted");
+      fetchClient();
+    } catch (error) {
+      console.error("Failed to delete external link:", error);
+      toast.error("Failed to delete external link");
+    }
   };
 
   if (loading) {
@@ -246,6 +260,29 @@ export default function ClientDetailPage() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-2">
+              {client.externalLinks && client.externalLinks.length > 0 ? (
+                client.externalLinks.map((link) => (
+                  <div key={link.id} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100">
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline flex-1"
+                    >
+                      🔗 {link.title} →
+                    </a>
+                    <button
+                      onClick={() => handleDeleteExternalLink(link.id)}
+                      className="text-red-600 hover:text-red-800 text-xs ml-2"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-neutral-500">No external links added</div>
+              )}
+              {/* Legacy links - Show if still present */}
               {client.googleSheetUrl && (
                 <a
                   href={client.googleSheetUrl}
@@ -278,9 +315,6 @@ export default function ClientDetailPage() {
                 >
                   🌐 Website →
                 </a>
-              )}
-              {!client.googleSheetUrl && !client.notionPageUrl && !client.slackChannel && !client.website && (
-                <div className="text-sm text-neutral-500">No external links added</div>
               )}
             </CardContent>
           </Card>
@@ -541,31 +575,27 @@ function AddExternalLinkDialog({
   clientId: string;
   onSuccess: () => void;
 }) {
-  const [linkType, setLinkType] = useState<string>("");
+  const [linkTitle, setLinkTitle] = useState<string>("");
   const [linkUrl, setLinkUrl] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
-  const linkTypes = [
-    { value: "googleSheetUrl", label: "Google Sheets" },
-    { value: "notionPageUrl", label: "Notion Page" },
-    { value: "slackChannel", label: "Slack Channel" },
-    { value: "website", label: "Website" },
-  ];
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!linkType || !linkUrl.trim()) {
-      toast.error("Please select link type and enter URL");
+    if (!linkTitle.trim() || !linkUrl.trim()) {
+      toast.error("Please enter both title and URL");
       return;
     }
 
     try {
       setLoading(true);
-      await clientsApi.update(clientId, { [linkType]: linkUrl });
-      toast.success("External link added successfully");
+      await clientsApi.addExternalLink(clientId, {
+        title: linkTitle,
+        url: linkUrl,
+      });
+      toast.success(`Added: ${linkTitle}`);
       onOpenChange(false);
       onSuccess();
-      setLinkType("");
+      setLinkTitle("");
       setLinkUrl("");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to add external link");
@@ -579,26 +609,21 @@ function AddExternalLinkDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add External Link</DialogTitle>
-          <DialogDescription>Add a link to external resources for this client</DialogDescription>
+          <DialogDescription>Add any link with a custom title</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label>
-                Link Type <span className="text-red-500">*</span>
+                Title <span className="text-red-500">*</span>
               </Label>
-              <Select value={linkType} onValueChange={setLinkType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select link type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {linkTypes.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                type="text"
+                value={linkTitle}
+                onChange={(e) => setLinkTitle(e.target.value)}
+                placeholder="e.g., Pricing Sheet, API Docs, Project Board"
+                required
+              />
             </div>
             <div className="grid gap-2">
               <Label>
@@ -608,7 +633,7 @@ function AddExternalLinkDialog({
                 type="url"
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
-                placeholder={linkType === "slackChannel" ? "#channel-name" : "https://..."}
+                placeholder="https://..."
                 required
               />
             </div>

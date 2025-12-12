@@ -11,6 +11,7 @@ import {
   addNoteSchema,
   addDealSchema,
   updateDealSchema,
+  addExternalLinkSchema,
 } from "@repo/zod";
 import {
   validateFile,
@@ -119,6 +120,9 @@ router.get("/:id", authenticate, async (req: Request, res: Response) => {
             source: true,
             convertedAt: true,
           },
+        },
+        externalLinks: {
+          orderBy: { createdAt: "desc" },
         },
         deals: {
           where: {
@@ -789,5 +793,84 @@ router.delete(
     }
   }
 );
+
+// POST /clients/:id/external-links - Add external link
+router.post("/:id/external-links", authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { role, userId } = req.user!;
+
+    const validation = addExternalLinkSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        error: "Validation failed",
+        details: validation.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    const client = await prisma.client.findUnique({ where: { id } });
+    if (!client) {
+      res.status(404).json({ error: "Client not found" });
+      return;
+    }
+
+    if (role === "EMPLOYEE" && client.accountManagerId !== userId) {
+      res.status(403).json({ error: "Access denied" });
+      return;
+    }
+
+    const data = validation.data;
+    const externalLink = await prisma.externalLink.create({
+      data: {
+        title: data.title,
+        url: data.url,
+        client: {
+          connect: { id },
+        },
+      },
+    });
+
+    res.status(201).json({
+      message: "External link added successfully",
+      externalLink,
+    });
+  } catch (error) {
+    console.error("Add external link error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /clients/:clientId/external-links/:linkId - Delete external link
+router.delete("/:clientId/external-links/:linkId", authenticate, async (req: Request, res: Response) => {
+  try {
+    const { clientId, linkId } = req.params;
+    const { role, userId } = req.user!;
+
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) {
+      res.status(404).json({ error: "Client not found" });
+      return;
+    }
+
+    if (role === "EMPLOYEE" && client.accountManagerId !== userId) {
+      res.status(403).json({ error: "Access denied" });
+      return;
+    }
+
+    const externalLink = await prisma.externalLink.findUnique({ where: { id: linkId } });
+    if (!externalLink || externalLink.clientId !== clientId) {
+      res.status(404).json({ error: "External link not found" });
+      return;
+    }
+
+    await prisma.externalLink.delete({ where: { id: linkId } });
+
+    res.json({ message: "External link deleted successfully" });
+  } catch (error) {
+    console.error("Delete external link error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 export default router;

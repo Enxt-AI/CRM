@@ -198,6 +198,15 @@ export type ConvertLeadData = {
   estimatedValue: number;
 };
 
+export type ExternalLink = {
+  id: string;
+  title: string;
+  url: string;
+  clientId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Client = {
   id: string;
   companyName: string;
@@ -228,6 +237,7 @@ export type Client = {
   meetings?: Meeting[];
   notes?: Note[];
   activities?: Activity[];
+  externalLinks?: ExternalLink[];
   originLead?: {
     id: string;
     name: string;
@@ -558,6 +568,18 @@ export const clients = {
     request<{ message: string; note: Note }>(`/clients/${clientId}/notes`, {
       method: "POST",
       body: data,
+    }),
+
+  // External Links
+  addExternalLink: (clientId: string, data: { title: string; url: string }) =>
+    request<{ message: string; externalLink: ExternalLink }>(`/clients/${clientId}/external-links`, {
+      method: "POST",
+      body: data,
+    }),
+
+  deleteExternalLink: (clientId: string, linkId: string) =>
+    request<{ message: string }>(`/clients/${clientId}/external-links/${linkId}`, {
+      method: "DELETE",
     }),
 
   // Deals

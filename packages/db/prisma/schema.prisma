@@ -166,7 +166,7 @@ model Client {
   address        String?
   website        String?
   
-  // External Links
+  // External Links - DEPRECATED: Use ExternalLink model instead
   googleSheetUrl String?      // Link to Google Sheets tracker
   notionPageUrl  String?      // Link to Notion workspace
   slackChannel   String?      // Dedicated Slack channel
@@ -188,6 +188,7 @@ model Client {
   tasks          Task[]
   meetings       Meeting[]    // Scheduled client meetings
   notes          Note[]       // e.g., "Decision maker is CTO, prefers technical demos"
+  externalLinks  ExternalLink[] // Custom external links with titles
   
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -202,6 +203,26 @@ enum ClientStatus {
   INACTIVE  // No recent activity
   CHURNED   // Left for competitor
   PAUSED    // Temporarily not engaged
+}
+
+// =========================================
+// EXTERNAL LINKS (Custom titled links for clients)
+// =========================================
+
+model ExternalLink {
+  id        String   @id @default(uuid())
+  
+  title     String   // User's custom title: "Pricing Sheet", "API Docs", etc.
+  url       String   // The actual URL
+  
+  // Relations
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([clientId])
 }
 
 model Deal {

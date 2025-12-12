@@ -209,6 +209,12 @@ export const addNoteSchema = z.object({
   isPinned: z.boolean().default(false),
 });
 
+// Add external link
+export const addExternalLinkSchema = z.object({
+  title: z.string().min(1).max(255),
+  url: z.string().url("Invalid URL"),
+});
+
 // Add deal (revenue)
 export const addDealSchema = z.object({
   title: z.string().min(1).max(255),

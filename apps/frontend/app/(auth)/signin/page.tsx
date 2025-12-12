@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { auth, ApiError, tasks as tasksApi } from "@/lib/api";
+import { auth, ApiError, tasks as tasksApi, meetings as meetingsApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,9 +98,10 @@ export default function SigninPage() {
 
   async function showTodayReminders() {
     try {
-      const [tasksData, followUpsData] = await Promise.all([
+      const [tasksData, followUpsData, meetingsData] = await Promise.all([
         tasksApi.list(),
         tasksApi.followUps.list(),
+        meetingsApi.list(),
       ]);
 
       const today = new Date();
@@ -120,16 +121,32 @@ export default function SigninPage() {
         return followUpDate.getTime() === today.getTime();
       });
 
-      // Show toast notifications
+      // Filter today's meetings
+      const todayMeetings = meetingsData.meetings.filter((meeting) => {
+        const meetingDate = new Date(meeting.startTime);
+        meetingDate.setHours(0, 0, 0, 0);
+        return meeting.status === "SCHEDULED" && meetingDate.getTime() === today.getTime();
+      });
+
+      // Combine all reminders into a single message to avoid flickering
+      const reminders: string[] = [];
+      
       if (todayTasks.length > 0) {
-        toast.info(`📋 You have ${todayTasks.length} task${todayTasks.length > 1 ? 's' : ''} due today!`, {
-          duration: 5000,
-        });
+        reminders.push(`📋 ${todayTasks.length} task${todayTasks.length > 1 ? 's' : ''} due`);
+      }
+      
+      if (todayFollowUps.length > 0) {
+        reminders.push(`📞 ${todayFollowUps.length} follow-up${todayFollowUps.length > 1 ? 's' : ''}`);
       }
 
-      if (todayFollowUps.length > 0) {
-        toast.info(`📞 ${todayFollowUps.length} follow-up${todayFollowUps.length > 1 ? 's' : ''} scheduled for today!`, {
-          duration: 5000,
+      if (todayMeetings.length > 0) {
+        reminders.push(`📅 ${todayMeetings.length} meeting${todayMeetings.length > 1 ? 's' : ''}`);
+      }
+
+      // Show single combined notification if there are any reminders
+      if (reminders.length > 0) {
+        toast.info(`Today: ${reminders.join(" • ")}`, {
+          duration: 6000,
         });
       }
     } catch (error) {
