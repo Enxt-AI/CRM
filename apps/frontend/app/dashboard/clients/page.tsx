@@ -190,7 +190,6 @@ export default function ClientsPage() {
                     <TableHead>Deals</TableHead>
                     <TableHead>Total Value</TableHead>
                     <TableHead>Lifetime Value</TableHead>
-                    <TableHead>Lead Added Date</TableHead>
                     <TableHead>Client Since</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -248,9 +247,6 @@ export default function ClientsPage() {
                       </TableCell>
                       <TableCell className="font-semibold text-green-600">
                         {formatCurrency(Number(client.lifetimeValue))}
-                      </TableCell>
-                      <TableCell className="text-neutral-500 text-sm">
-                        {client.leadConvertedAt ? formatDate(client.leadConvertedAt) : "—"}
                       </TableCell>
                       <TableCell className="text-neutral-500 text-sm">
                         {formatDate(client.createdAt)}

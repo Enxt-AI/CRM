@@ -327,6 +327,7 @@ export default function LeadsPage() {
                     <TableHead>Owner</TableHead>
                     <TableHead>Next Follow Up</TableHead>
                     <TableHead>Source</TableHead>
+                    <TableHead>Lead Added</TableHead>
                     <TableHead>Notes</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -373,6 +374,9 @@ export default function LeadsPage() {
                             </span>
                           )}
                         </span>
+                      </TableCell>
+                      <TableCell className="text-neutral-500 text-sm">
+                        {formatDate(lead.createdAt)}
                       </TableCell>
                       <TableCell>
                         <button
