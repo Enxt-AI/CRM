@@ -534,7 +534,6 @@ router.post("/:id/deals", authenticate, async (req: Request, res: Response) => {
         dealType: data.dealType || null,
         industry: data.industry || client.industry || null,
         stage: data.stage || "QUALIFICATION",
-        probability: data.probability || 50,
         expectedCloseDate: data.expectedCloseDate ? new Date(data.expectedCloseDate) : null,
         nextSteps: data.nextSteps || null,
         ownerId: data.ownerId || client.accountManagerId,

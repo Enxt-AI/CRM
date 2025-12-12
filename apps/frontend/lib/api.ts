@@ -226,6 +226,7 @@ export type Client = {
   lifetimeValue: number;
   estimatedValue: number | null;
   accountManagerId: string;
+  leadConvertedAt: string | null;
   accountManager: {
     id: string;
     fullName: string;
@@ -269,7 +270,6 @@ export type Deal = {
   industry: string | null;
   stage: DealStage;
   progress: number;
-  probability: number;
   expectedCloseDate: string | null;
   actualCloseDate: string | null;
   nextSteps: string | null;
@@ -494,7 +494,6 @@ export type AddDealData = {
   dealType?: string | null;
   industry?: string | null;
   stage?: DealStage;
-  probability?: number;
   expectedCloseDate?: string | null;
   nextSteps?: string | null;
   ownerId?: string;

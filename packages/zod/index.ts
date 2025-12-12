@@ -225,7 +225,6 @@ export const addDealSchema = z.object({
   dealType: z.string().max(100).optional().nullable(),
   industry: z.string().max(100).optional().nullable(),
   stage: z.enum(["QUALIFICATION", "NEEDS_ANALYSIS", "VALUE_PROPOSITION", "PROPOSAL_PRICE_QUOTE", "NEGOTIATION", "CLOSED_WON", "CLOSED_LOST"]).default("QUALIFICATION"),
-  probability: z.number().min(0).max(100).default(50),
   expectedCloseDate: z.string().optional().nullable(), // ISO date string
   nextSteps: z.string().max(1000).optional().nullable(),
   ownerId: z.string().uuid().optional(), // If not provided, use client's account manager

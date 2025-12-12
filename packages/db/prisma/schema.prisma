@@ -99,6 +99,7 @@ model Client {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   estimatedValue   Decimal?       @db.Decimal(12, 2)
+  leadConvertedAt  DateTime?
   activities       Activity[]
   accountManager   User           @relation("AccountManager", fields: [accountManagerId], references: [id])
   deals            Deal[]

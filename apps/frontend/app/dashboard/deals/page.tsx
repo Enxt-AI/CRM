@@ -229,9 +229,6 @@ export default function DealsPage() {
                             <span className="text-sm font-semibold text-blue-600">
                               {formatCurrency(Number(deal.value))}
                             </span>
-                            <span className="text-xs text-neutral-500">
-                              {deal.probability}% prob
-                            </span>
                           </div>
                           {deal.owner && (
                             <p className="text-xs text-neutral-500 mt-2">

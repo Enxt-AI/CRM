@@ -364,6 +364,7 @@ router.post("/:id/convert", authenticate, async (req: Request, res: Response) =>
           lifetimeValue: 0, // Lifetime value starts at 0, only increments with CLOSED_WON deals
           estimatedValue: estimatedValue, // Store estimated value separately
           accountManagerId: lead.ownerId,
+          leadConvertedAt: new Date(),
         },
       });
 

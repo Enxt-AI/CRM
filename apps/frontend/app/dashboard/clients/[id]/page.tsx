@@ -349,7 +349,6 @@ export default function ClientDetailPage() {
                           <div className="font-semibold text-green-600">
                             {formatCurrency(Number(deal.value), deal.currency)}
                           </div>
-                          <div className="text-xs text-neutral-500">{deal.probability}% probability</div>
                         </div>
                         <Badge className={`${DEAL_STAGE_STYLES[deal.stage]} border-0`}>
                           {DEAL_STAGE_LABELS[deal.stage]}
@@ -669,7 +668,6 @@ function AddDealDialog({
     title: "",
     value: 0,
     stage: "QUALIFICATION",
-    probability: 50,
     currency: "INR",
   });
 
@@ -681,7 +679,7 @@ function AddDealDialog({
       toast.success("Deal added successfully");
       onOpenChange(false);
       onSuccess();
-      setFormData({ title: "", value: 0, stage: "QUALIFICATION", probability: 50, currency: "INR" });
+      setFormData({ title: "", value: 0, stage: "QUALIFICATION", currency: "INR" });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to add deal");
     } finally {
@@ -710,31 +708,18 @@ function AddDealDialog({
                 required
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="value">
-                  Deal Value <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="value"
-                  type="number"
-                  min="0"
-                  value={formData.value || ""}
-                  onChange={(e) => setFormData({ ...formData, value: e.target.value ? parseFloat(e.target.value) : 0 })}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="probability">Probability (%)</Label>
-                <Input
-                  id="probability"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={formData.probability || ""}
-                  onChange={(e) => setFormData({ ...formData, probability: e.target.value ? parseInt(e.target.value) : 0 })}
-                />
-              </div>
+            <div className="grid gap-2">
+              <Label htmlFor="value">
+                Deal Value <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="value"
+                type="number"
+                min="0"
+                value={formData.value || ""}
+                onChange={(e) => setFormData({ ...formData, value: e.target.value ? parseFloat(e.target.value) : 0 })}
+                required
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="stage">Stage</Label>
