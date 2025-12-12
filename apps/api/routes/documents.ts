@@ -50,9 +50,6 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
       // 1. Documents directly shared with them, OR
       // 2. Documents in folders shared with them
       
-      console.log(`\n========== NON-ADMIN DOCUMENT QUERY ==========`);
-      console.log(`[${role}] User ${userId} requesting documents...`);
-      
       // First, let's see ALL shared documents to understand what's in the database
       const allSharedDocs = await prisma.managedDocument.findMany({
         where: { type: "SHARED" },
@@ -67,14 +64,6 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
             },
           },
         },
-      });
-      
-      console.log(`\nTotal SHARED documents in database: ${allSharedDocs.length}`);
-      allSharedDocs.forEach(doc => {
-        console.log(`  - "${doc.name}":`);
-        console.log(`      Directly shared with: ${doc.sharedWithUsers.map(u => u.fullName).join(", ") || "nobody"}`);
-        console.log(`      Folder: ${doc.folder?.name || "root"} (${doc.folder?.type || "N/A"})`);
-        console.log(`      Folder shared with: ${doc.folder?.sharedWithUsers?.map(u => u.fullName).join(", ") || "nobody"}`);
       });
       
       // Now run the actual query
@@ -115,14 +104,10 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
         orderBy: { createdAt: "desc" },
       });
       
-      // Detailed logging
-      console.log(`\n[${role}] Query returned ${documents.length} documents for user ${userId}`);
       documents.forEach(doc => {
         const directShared = doc.sharedWithUsers.some(u => u.id === userId);
         const folderShared = doc.folder?.sharedWithUsers?.some(u => u.id === userId);
-        console.log(`  - ${doc.name}: direct=${directShared}, folder=${folderShared}, folderType=${doc.folder?.type}, folderName=${doc.folder?.name}`);
       });
-      console.log(`==============================================\n`);
     }
 
     res.json(documents);
@@ -296,9 +281,6 @@ router.post(
           : [],
       };
 
-      console.log("Metadata:", metadata);
-      console.log("Shared with user IDs:", metadata.sharedWithUserIds);
-
       const metadataValidation = uploadDocumentSchema.safeParse(metadata);
       if (!metadataValidation.success) {
         res.status(400).json({ error: metadataValidation.error.errors });
@@ -321,12 +303,10 @@ router.post(
           res.status(404).json({ error: "Folder not found" });
           return;
         }
-        console.log(`Folder "${folder.name}" (type: ${folder.type}) shared with:`, folder.sharedWithUsers.map(u => u.fullName));
       }
 
       // Generate S3 key and upload
       const s3Key = generateS3Key(req.file.originalname);
-      console.log("S3 Key:", s3Key);
       
       const uploadResult = await uploadToS3(req.file, s3Key);
 
@@ -366,10 +346,7 @@ router.post(
           },
         },
       });
-
-      console.log("Document created with", document.sharedWithUsers.length, "shared users:", 
-        document.sharedWithUsers.map(u => u.fullName));
-
+      
       res.status(201).json(document);
     } catch (error) {
       console.error("Error uploading document:", error);

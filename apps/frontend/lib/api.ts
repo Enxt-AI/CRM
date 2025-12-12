@@ -49,9 +49,6 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   
   const data = await response.json();
 
-  if (!response.ok) {
-    throw new ApiError(response.status, data.error || "An error occurred", data.details);
-  }
 
   return data as T;
 }
