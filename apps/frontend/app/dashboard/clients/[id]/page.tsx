@@ -856,7 +856,6 @@ function AddMeetingDialog({
   const [formData, setFormData] = useState<AddMeetingData>({
     title: "",
     startTime: "",
-    endTime: "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -867,7 +866,7 @@ function AddMeetingDialog({
       toast.success("Meeting scheduled successfully");
       onOpenChange(false);
       onSuccess();
-      setFormData({ title: "", startTime: "", endTime: "" });
+      setFormData({ title: "", startTime: "" });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to schedule meeting");
     } finally {
@@ -899,15 +898,6 @@ function AddMeetingDialog({
                 type="datetime-local"
                 value={formData.startTime}
                 onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>End Time</Label>
-              <Input
-                type="datetime-local"
-                value={formData.endTime}
-                onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
                 required
               />
             </div>

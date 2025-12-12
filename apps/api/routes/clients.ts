@@ -400,14 +400,17 @@ router.post("/:id/meetings", authenticate, async (req: Request, res: Response) =
     }
 
     const data = validation.data;
+    const startTime = new Date(data.startTime);
+    const endTime = data.endTime ? new Date(data.endTime) : new Date(startTime.getTime() + 60 * 60 * 1000);
+    
     const meeting = await prisma.meeting.create({
       data: {
         title: data.title,
         description: data.description || null,
         location: data.location || null,
         meetingUrl: data.meetingUrl || null,
-        startTime: new Date(data.startTime),
-        endTime: new Date(data.endTime),
+        startTime,
+        endTime,
         organizerId: userId,
         clientId: id,
       },

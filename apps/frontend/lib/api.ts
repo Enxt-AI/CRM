@@ -328,6 +328,16 @@ export type Meeting = {
     id: string;
     fullName: string;
   };
+  clientId?: string | null;
+  client?: {
+    id: string;
+    companyName: string;
+  } | null;
+  leadId?: string | null;
+  lead?: {
+    id: string;
+    name: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -457,7 +467,7 @@ export type AddMeetingData = {
   location?: string | null;
   meetingUrl?: string | null;
   startTime: string;
-  endTime: string;
+  endTime?: string;
 };
 
 export type AddNoteData = {
@@ -853,5 +863,15 @@ export const tasks = {
       }>("/tasks/follow-ups/stats"),
     delete: (leadId: string) => request<{ message: string }>(`/tasks/follow-ups/${leadId}`, { method: "PATCH" }),
   },
+};
+
+// Meetings API
+export const meetings = {
+  list: () => request<{ meetings: Meeting[] }>("/meetings"),
+  
+  delete: (id: string) =>
+    request<{ message: string }>(`/meetings/${id}`, {
+      method: "DELETE",
+    }),
 };
 

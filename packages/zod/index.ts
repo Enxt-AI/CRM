@@ -200,7 +200,7 @@ export const addMeetingSchema = z.object({
   location: z.string().max(255).optional().nullable(),
   meetingUrl: z.string().url("Invalid URL").optional().nullable().or(z.literal("")),
   startTime: z.string(), // ISO datetime string
-  endTime: z.string(), // ISO datetime string
+  endTime: z.string().optional(), // Optional - defaults to 1 hour after start
 });
 
 // Add note
