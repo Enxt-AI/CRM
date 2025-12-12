@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { auth, ApiError } from "@/lib/api";
+import { auth, ApiError, tasks as tasksApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,6 +80,10 @@ export default function SigninPage() {
       // Use login from AuthContext to update global auth state
       await login(formData.username, formData.password);
       toast.success("Signed in successfully!");
+      
+      // Fetch and show today's tasks and follow-ups
+      showTodayReminders();
+      
       router.push("/dashboard");
     } catch (error) {
       if (error instanceof ApiError) {
@@ -89,6 +93,48 @@ export default function SigninPage() {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function showTodayReminders() {
+    try {
+      const [tasksData, followUpsData] = await Promise.all([
+        tasksApi.list(),
+        tasksApi.followUps.list(),
+      ]);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Filter today's tasks
+      const todayTasks = tasksData.tasks.filter((task) => {
+        const taskDate = new Date(task.dueDate);
+        taskDate.setHours(0, 0, 0, 0);
+        return !task.isCompleted && taskDate.getTime() === today.getTime();
+      });
+
+      // Filter today's follow-ups
+      const todayFollowUps = followUpsData.followUps.filter((followUp) => {
+        const followUpDate = new Date(followUp.nextFollowUpAt);
+        followUpDate.setHours(0, 0, 0, 0);
+        return followUpDate.getTime() === today.getTime();
+      });
+
+      // Show toast notifications
+      if (todayTasks.length > 0) {
+        toast.info(`📋 You have ${todayTasks.length} task${todayTasks.length > 1 ? 's' : ''} due today!`, {
+          duration: 5000,
+        });
+      }
+
+      if (todayFollowUps.length > 0) {
+        toast.info(`📞 ${todayFollowUps.length} follow-up${todayFollowUps.length > 1 ? 's' : ''} scheduled for today!`, {
+          duration: 5000,
+        });
+      }
+    } catch (error) {
+      // Silently fail - don't disrupt login flow
+      console.error("Failed to fetch reminders:", error);
     }
   }
 

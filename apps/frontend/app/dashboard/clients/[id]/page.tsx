@@ -78,6 +78,7 @@ export default function ClientDetailPage() {
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [externalLinkDialogOpen, setExternalLinkDialogOpen] = useState(false);
   const [uploadingDocument, setUploadingDocument] = useState(false);
 
   const fetchClient = useCallback(async () => {
@@ -240,6 +241,9 @@ export default function ClientDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg">External Links</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => setExternalLinkDialogOpen(true)}>
+                + Add Link
+              </Button>
             </CardHeader>
             <CardContent className="space-y-2">
               {client.googleSheetUrl && (
@@ -515,7 +519,111 @@ export default function ClientDetailPage() {
         clientId={clientId}
         onSuccess={fetchClient}
       />
+      <AddExternalLinkDialog
+        open={externalLinkDialogOpen}
+        onOpenChange={setExternalLinkDialogOpen}
+        clientId={clientId}
+        onSuccess={fetchClient}
+      />
     </div>
+  );
+}
+
+// Add External Link Dialog
+function AddExternalLinkDialog({
+  open,
+  onOpenChange,
+  clientId,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  clientId: string;
+  onSuccess: () => void;
+}) {
+  const [linkType, setLinkType] = useState<string>("");
+  const [linkUrl, setLinkUrl] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+
+  const linkTypes = [
+    { value: "googleSheetUrl", label: "Google Sheets" },
+    { value: "notionPageUrl", label: "Notion Page" },
+    { value: "slackChannel", label: "Slack Channel" },
+    { value: "website", label: "Website" },
+  ];
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!linkType || !linkUrl.trim()) {
+      toast.error("Please select link type and enter URL");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await clientsApi.update(clientId, { [linkType]: linkUrl });
+      toast.success("External link added successfully");
+      onOpenChange(false);
+      onSuccess();
+      setLinkType("");
+      setLinkUrl("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to add external link");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add External Link</DialogTitle>
+          <DialogDescription>Add a link to external resources for this client</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit}>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>
+                Link Type <span className="text-red-500">*</span>
+              </Label>
+              <Select value={linkType} onValueChange={setLinkType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select link type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {linkTypes.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>
+                URL <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder={linkType === "slackChannel" ? "#channel-name" : "https://..."}
+                required
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Adding..." : "Add Link"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
