@@ -296,3 +296,44 @@ export type CreateFolderInput = z.infer<typeof createFolderSchema>;
 export type UpdateFolderInput = z.infer<typeof updateFolderSchema>;
 export type UploadDocumentInput = z.infer<typeof uploadDocumentSchema>;
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
+
+// MEETING SCHEMAS
+
+export const meetingAttendeeStatusEnum = z.enum(["PENDING", "ACCEPTED", "DECLINED"]);
+
+// Create meeting (standalone)
+export const createMeetingSchema = z.object({
+  title: z.string().min(1, "Title is required").max(255),
+  description: z.string().max(2000).optional().nullable(),
+  location: z.string().max(255).optional().nullable(),
+  startTime: z.string(), // ISO datetime string
+  endTime: z.string(), // ISO datetime string
+  clientId: z.string().uuid().optional().nullable(),
+  leadId: z.string().uuid().optional().nullable(),
+  attendeeIds: z.array(z.string().uuid()).optional().default([]),
+});
+
+// Update meeting
+export const updateMeetingSchema = z.object({
+  title: z.string().min(1).max(255).optional(),
+  description: z.string().max(2000).optional().nullable(),
+  location: z.string().max(255).optional().nullable(),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+});
+
+// Invite users to meeting
+export const inviteToMeetingSchema = z.object({
+  userIds: z.array(z.string().uuid()).min(1, "At least one user ID is required"),
+});
+
+// Respond to meeting invitation
+export const respondToMeetingSchema = z.object({
+  response: z.enum(["ACCEPTED", "DECLINED"]),
+});
+
+export type MeetingAttendeeStatus = z.infer<typeof meetingAttendeeStatusEnum>;
+export type CreateMeetingInput = z.infer<typeof createMeetingSchema>;
+export type UpdateMeetingInput = z.infer<typeof updateMeetingSchema>;
+export type InviteToMeetingInput = z.infer<typeof inviteToMeetingSchema>;
+export type RespondToMeetingInput = z.infer<typeof respondToMeetingSchema>;

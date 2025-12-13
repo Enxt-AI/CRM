@@ -321,6 +321,21 @@ export type Document = {
 
 export type TaskType = "GENERAL" | "CALL" | "EMAIL" | "FOLLOW_UP" | "PROPOSAL" | "CONTRACT";
 
+export type MeetingAttendeeStatus = "PENDING" | "ACCEPTED" | "DECLINED";
+
+export type MeetingAttendee = {
+  id: string;
+  userId: string;
+  status: MeetingAttendeeStatus;
+  user: {
+    id: string;
+    fullName: string;
+    email: string | null;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Meeting = {
   id: string;
   title: string;
@@ -345,6 +360,18 @@ export type Meeting = {
     id: string;
     name: string;
   } | null;
+  attendees?: MeetingAttendee[];
+  googleEventId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MeetingInvite = {
+  id: string;
+  meetingId: string;
+  userId: string;
+  status: MeetingAttendeeStatus;
+  meeting: Meeting;
   createdAt: string;
   updatedAt: string;
 };
@@ -884,12 +911,76 @@ export const tasks = {
 };
 
 // Meetings API
+export type CreateMeetingData = {
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  startTime: string;
+  endTime: string;
+  clientId?: string | null;
+  leadId?: string | null;
+  attendeeIds?: string[];
+};
+
+export type UpdateMeetingData = {
+  title?: string;
+  description?: string | null;
+  location?: string | null;
+  startTime?: string;
+  endTime?: string;
+};
+
 export const meetings = {
   list: () => request<{ meetings: Meeting[] }>("/meetings"),
-  
+
+  create: (data: CreateMeetingData) =>
+    request<{ meeting: Meeting }>("/meetings", {
+      method: "POST",
+      body: data,
+    }),
+
+  update: (id: string, data: UpdateMeetingData) =>
+    request<{ meeting: Meeting }>(`/meetings/${id}`, {
+      method: "PATCH",
+      body: data,
+    }),
+
   delete: (id: string) =>
     request<{ message: string }>(`/meetings/${id}`, {
       method: "DELETE",
     }),
+
+  invite: (id: string, userIds: string[]) =>
+    request<{ meeting: Meeting }>(`/meetings/${id}/invite`, {
+      method: "POST",
+      body: { userIds },
+    }),
+
+  respond: (id: string, response: "ACCEPTED" | "DECLINED") =>
+    request<{ message: string }>(`/meetings/${id}/respond`, {
+      method: "PATCH",
+      body: { response },
+    }),
+
+  getInvites: () =>
+    request<{ invites: MeetingInvite[] }>("/meetings/invites"),
 };
 
+// Google Calendar API
+export type GoogleCalendarStatus = {
+  connected: boolean;
+  email?: string;
+};
+
+export const googleCalendar = {
+  getStatus: () =>
+    request<GoogleCalendarStatus>("/auth/google/status"),
+
+  getConnectUrl: () =>
+    request<{ authUrl: string }>("/auth/google/connect"),
+
+  disconnect: () =>
+    request<{ message: string }>("/auth/google/disconnect", {
+      method: "POST",
+    }),
+};

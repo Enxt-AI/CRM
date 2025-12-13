@@ -13,6 +13,7 @@ import {
   updateDealSchema,
   addExternalLinkSchema,
 } from "@repo/zod";
+import { createCalendarEvent } from "../lib/google-calendar";
 import {
   validateFile,
   generateS3Key,
@@ -423,14 +424,43 @@ router.post("/:id/meetings", authenticate, async (req: Request, res: Response) =
           select: {
             id: true,
             fullName: true,
+            googleRefreshToken: true,
           },
         },
       },
     });
 
+    // Sync with Google Calendar if connected
+    if (meeting.organizer.googleRefreshToken) {
+      try {
+        const googleEventId = await createCalendarEvent(userId, {
+          title: meeting.title,
+          description: meeting.description || undefined,
+          location: meeting.location || undefined,
+          startTime,
+          endTime,
+        });
+
+        if (googleEventId) {
+          await prisma.meeting.update({
+            where: { id: meeting.id },
+            data: { googleEventId },
+          });
+        }
+      } catch (calendarError) {
+        console.error("Failed to create Google Calendar event:", calendarError);
+      }
+    }
+
     res.status(201).json({
       message: "Meeting scheduled successfully",
-      meeting,
+      meeting: {
+        ...meeting,
+        organizer: {
+          id: meeting.organizer.id,
+          fullName: meeting.organizer.fullName,
+        },
+      },
     });
   } catch (error) {
     console.error("Add meeting error:", error);

@@ -974,17 +974,22 @@ function AddMeetingDialog({
   const [formData, setFormData] = useState<AddMeetingData>({
     title: "",
     startTime: "",
+    endTime: "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.endTime) {
+      toast.error("Please select an end time");
+      return;
+    }
     setLoading(true);
     try {
       await clientsApi.addMeeting(clientId, formData);
       toast.success("Meeting scheduled successfully");
       onOpenChange(false);
       onSuccess();
-      setFormData({ title: "", startTime: "" });
+      setFormData({ title: "", startTime: "", endTime: "" });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to schedule meeting");
     } finally {
@@ -1011,13 +1016,40 @@ function AddMeetingDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label>Start Time</Label>
-              <Input
-                type="datetime-local"
-                value={formData.startTime}
-                onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                required
+              <Label>Description</Label>
+              <Textarea
+                value={formData.description || ""}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, description: e.target.value })}
+                rows={3}
               />
+            </div>
+            <div className="grid gap-2">
+              <Label>Location</Label>
+              <Input
+                value={formData.location || ""}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                placeholder="Office, Zoom link, etc."
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Start Time <span className="text-red-500">*</span></Label>
+                <Input
+                  type="datetime-local"
+                  value={formData.startTime}
+                  onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>End Time <span className="text-red-500">*</span></Label>
+                <Input
+                  type="datetime-local"
+                  value={formData.endTime || ""}
+                  onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                  required
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>

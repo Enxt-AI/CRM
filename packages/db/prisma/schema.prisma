@@ -8,32 +8,38 @@ datasource db {
 }
 
 model User {
-  id                  String            @id @default(uuid())
-  username            String            @unique
-  passwordHash        String
-  fullName            String
-  role                Role              @default(EMPLOYEE)
-  isActive            Boolean           @default(true)
-  needsPasswordChange Boolean           @default(true)
-  lastLoginAt         DateTime?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  activities          Activity[]        @relation("ActivityCreator")
-  clients             Client[]          @relation("AccountManager")
-  deletedDeals        Deal[]            @relation("DealDeleter")
-  deals               Deal[]            @relation("DealOwner")
-  createdFolders      Folder[]          @relation("FolderCreator")
-  leads               Lead[]            @relation("LeadOwner")
-  uploadedDocuments   ManagedDocument[] @relation("DocumentUploader")
-  meetings            Meeting[]         @relation("MeetingOrganizer")
-  notes               Note[]            @relation("NoteAuthor")
-  tasks               Task[]            @relation("TaskAssignee")
-  sharedDocuments     ManagedDocument[] @relation("SharedDocuments")
-  sharedFolders       Folder[]          @relation("SharedFolders")
+  id                   String            @id @default(uuid())
+  username             String            @unique
+  passwordHash         String
+  fullName             String
+  email                String?           @unique
+  role                 Role              @default(EMPLOYEE)
+  isActive             Boolean           @default(true)
+  needsPasswordChange  Boolean           @default(true)
+  lastLoginAt          DateTime?
+  googleRefreshToken   String?
+  googleCalendarId     String?
+  googleCalendarSynced Boolean           @default(false)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  activities           Activity[]        @relation("ActivityCreator")
+  clients              Client[]          @relation("AccountManager")
+  deletedDeals         Deal[]            @relation("DealDeleter")
+  deals                Deal[]            @relation("DealOwner")
+  createdFolders       Folder[]          @relation("FolderCreator")
+  leads                Lead[]            @relation("LeadOwner")
+  uploadedDocuments    ManagedDocument[] @relation("DocumentUploader")
+  meetings             Meeting[]         @relation("MeetingOrganizer")
+  meetingAttendees     MeetingAttendee[] @relation("MeetingAttendee")
+  notes                Note[]            @relation("NoteAuthor")
+  tasks                Task[]            @relation("TaskAssignee")
+  sharedDocuments      ManagedDocument[] @relation("SharedDocuments")
+  sharedFolders        Folder[]          @relation("SharedFolders")
 
   @@index([username])
   @@index([isActive])
   @@index([role])
+  @@index([email])
 }
 
 model Lead {
@@ -183,26 +189,46 @@ model Activity {
 }
 
 model Meeting {
-  id           String        @id @default(uuid())
-  title        String
-  description  String?
-  location     String?
-  meetingUrl   String?
-  startTime    DateTime
-  endTime      DateTime
-  status       MeetingStatus @default(SCHEDULED)
-  organizerId  String
-  leadId       String?
-  clientId     String?
-  reminderSent Boolean       @default(false)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  client       Client?       @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  lead         Lead?         @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  organizer    User          @relation("MeetingOrganizer", fields: [organizerId], references: [id])
+  id             String            @id @default(uuid())
+  title          String
+  description    String?
+  location       String?
+  meetingUrl     String?
+  startTime      DateTime
+  endTime        DateTime
+  status         MeetingStatus     @default(SCHEDULED)
+  organizerId    String
+  leadId         String?
+  clientId       String?
+  googleEventId  String?
+  reminderSent   Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  attendees      MeetingAttendee[]
+  client         Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  lead           Lead?             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  organizer      User              @relation("MeetingOrganizer", fields: [organizerId], references: [id])
 
   @@index([organizerId, startTime])
   @@index([startTime, status])
+  @@index([googleEventId])
+}
+
+model MeetingAttendee {
+  id              String                @id @default(uuid())
+  meetingId       String
+  userId          String
+  status          MeetingAttendeeStatus @default(PENDING)
+  googleEventId   String?
+  respondedAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  meeting         Meeting               @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user            User                  @relation("MeetingAttendee", fields: [userId], references: [id])
+
+  @@unique([meetingId, userId])
+  @@index([userId, status])
+  @@index([meetingId])
 }
 
 model Task {
@@ -380,6 +406,12 @@ enum MeetingStatus {
   COMPLETED
   CANCELLED
   NO_SHOW
+}
+
+enum MeetingAttendeeStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
 
 enum TaskType {

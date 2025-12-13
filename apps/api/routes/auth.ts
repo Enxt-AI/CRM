@@ -10,6 +10,12 @@ import {
   changePasswordSchema,
   createUserSchema,
 } from "../lib/validation";
+import {
+  getAuthUrl,
+  getTokensFromCode,
+  getGoogleUserEmail,
+  isCalendarConnected,
+} from "../lib/google-calendar";
 
 const router = Router();
 
@@ -391,6 +397,127 @@ router.patch("/users/:id/toggle-active", authenticate, requireAdmin, async (req:
     });
   } catch (error) {
     console.error("Toggle active error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ==== GOOGLE CALENDAR INTEGRATION ====
+
+// GET /auth/google/status - Check if user has Google Calendar connected
+router.get("/google/status", authenticate, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.user!;
+    
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        googleCalendarSynced: true,
+        email: true,
+      },
+    });
+
+    res.json({
+      connected: user?.googleCalendarSynced || false,
+      email: user?.email || null,
+    });
+  } catch (error) {
+    console.error("Google status error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /auth/google/connect - Initiate Google OAuth flow
+router.get("/google/connect", authenticate, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.user!;
+    
+    // Create state parameter with user ID for security
+    const state = Buffer.from(JSON.stringify({ userId })).toString("base64");
+    
+    const authUrl = getAuthUrl(state);
+    
+    res.json({ authUrl });
+  } catch (error) {
+    console.error("Google connect error:", error);
+    res.status(500).json({ error: "Failed to initiate Google connection" });
+  }
+});
+
+// GET /auth/google/callback - Handle OAuth callback
+router.get("/google/callback", async (req: Request, res: Response) => {
+  try {
+    const { code, state, error: oauthError } = req.query;
+    
+    // Frontend URL for redirecting after OAuth
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    
+    if (oauthError) {
+      console.error("OAuth error:", oauthError);
+      res.redirect(`${frontendUrl}/dashboard/meetings?google_error=access_denied`);
+      return;
+    }
+
+    if (!code || !state) {
+      res.redirect(`${frontendUrl}/dashboard/meetings?google_error=missing_params`);
+      return;
+    }
+
+    // Decode state to get user ID
+    let userId: string;
+    try {
+      const stateData = JSON.parse(Buffer.from(state as string, "base64").toString());
+      userId = stateData.userId;
+    } catch {
+      res.redirect(`${frontendUrl}/dashboard/meetings?google_error=invalid_state`);
+      return;
+    }
+
+    // Exchange code for tokens
+    const tokens = await getTokensFromCode(code as string);
+    
+    if (!tokens.refresh_token) {
+      res.redirect(`${frontendUrl}/dashboard/meetings?google_error=no_refresh_token`);
+      return;
+    }
+
+    // Get user's Google email
+    const googleEmail = await getGoogleUserEmail(tokens.access_token!);
+
+    // Save refresh token to user
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        googleRefreshToken: tokens.refresh_token,
+        googleCalendarSynced: true,
+        email: googleEmail || undefined,
+      },
+    });
+
+    // Redirect back to meetings page with success
+    res.redirect(`${frontendUrl}/dashboard/meetings?google_connected=true`);
+  } catch (error) {
+    console.error("Google callback error:", error);
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    res.redirect(`${frontendUrl}/dashboard/meetings?google_error=callback_failed`);
+  }
+});
+
+// POST /auth/google/disconnect - Disconnect Google Calendar
+router.post("/google/disconnect", authenticate, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.user!;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        googleRefreshToken: null,
+        googleCalendarSynced: false,
+      },
+    });
+
+    res.json({ message: "Google Calendar disconnected successfully" });
+  } catch (error) {
+    console.error("Google disconnect error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
