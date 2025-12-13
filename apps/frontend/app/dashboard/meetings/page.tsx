@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import {
   meetings as meetingsApi,
   googleCalendar,
-  users as usersApi,
+  auth,
   type Meeting,
   type MeetingInvite,
   type User,
@@ -74,7 +74,7 @@ export default function MeetingsPage() {
       const [meetingsData, invitesData, usersData] = await Promise.all([
         meetingsApi.list(),
         meetingsApi.getInvites(),
-        usersApi.list(),
+        auth.listUsers(),
       ]);
       setMeetingsList(meetingsData.meetings);
       setInvites(invitesData.invites);
@@ -354,25 +354,29 @@ export default function MeetingsPage() {
               <div>
                 <Label>Invite Attendees</Label>
                 <div className="mt-2 max-h-40 overflow-y-auto border rounded-md p-2 space-y-1">
-                  {users
-                    .filter((u) => u.isActive)
-                    .map((user) => (
-                      <label
-                        key={user.id}
-                        className="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData.attendeeIds.includes(user.id)}
-                          onChange={() => toggleAttendee(user.id)}
-                          className="rounded"
-                        />
-                        <span className="text-sm">{user.fullName}</span>
-                        <span className="text-xs text-gray-500">
-                          ({user.role})
-                        </span>
-                      </label>
-                    ))}
+                  {users && users.length > 0 ? (
+                    users
+                      .filter((u) => u.isActive)
+                      .map((user) => (
+                        <label
+                          key={user.id}
+                          className="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.attendeeIds.includes(user.id)}
+                            onChange={() => toggleAttendee(user.id)}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{user.fullName}</span>
+                          <span className="text-xs text-gray-500">
+                            ({user.role})
+                          </span>
+                        </label>
+                      ))
+                  ) : (
+                    <p className="text-sm text-gray-500 p-2">Loading users...</p>
+                  )}
                 </div>
                 {formData.attendeeIds.length > 0 && (
                   <p className="text-xs text-gray-500 mt-1">
