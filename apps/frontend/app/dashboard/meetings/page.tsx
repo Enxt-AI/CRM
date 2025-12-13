@@ -10,6 +10,7 @@ import {
   type User,
   type GoogleCalendarStatus,
 } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 export default function MeetingsPage() {
+  const { user: currentUser } = useAuth();
   const [meetingsList, setMeetingsList] = useState<Meeting[]>([]);
   const [invites, setInvites] = useState<MeetingInvite[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -356,7 +358,7 @@ export default function MeetingsPage() {
                 <div className="mt-2 max-h-40 overflow-y-auto border rounded-md p-2 space-y-1">
                   {users && users.length > 0 ? (
                     users
-                      .filter((u) => u.isActive)
+                      .filter((u) => u.isActive && u.id !== currentUser?.id)
                       .map((user) => (
                         <label
                           key={user.id}
@@ -661,6 +663,7 @@ export default function MeetingsPage() {
                             <Badge
                               variant="outline"
                               className="text-xs text-green-600 border-green-300"
+                              title="Synced to organizer's Google Calendar"
                             >
                               📅 Synced
                             </Badge>

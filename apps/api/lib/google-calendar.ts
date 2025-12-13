@@ -336,3 +336,75 @@ export async function removeEventFromUserCalendar(
 ): Promise<boolean> {
   return deleteCalendarEvent(userId, googleEventId);
 }
+
+/**
+ * Sync all accepted upcoming meetings to user's Google Calendar
+ * Called when a user connects their Google Calendar
+ */
+export async function syncAcceptedMeetingsToCalendar(userId: string): Promise<number> {
+  const calendar = await getCalendarClient(userId);
+  
+  if (!calendar) {
+    return 0;
+  }
+
+  try {
+    const now = new Date();
+    
+    // Get all accepted meeting invitations for upcoming meetings
+    const acceptedMeetings = await prisma.meetingAttendee.findMany({
+      where: {
+        userId,
+        status: "ACCEPTED",
+        meeting: {
+          startTime: {
+            gte: now,
+          },
+        },
+      },
+      include: {
+        meeting: {
+          include: {
+            organizer: {
+              select: {
+                email: true,
+                fullName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    let syncedCount = 0;
+
+    // Sync each accepted meeting
+    for (const attendee of acceptedMeetings) {
+      const meeting = attendee.meeting;
+      
+      try {
+        // Create event in user's calendar
+        const googleEventId = await addEventToUserCalendar(userId, {
+          title: meeting.title,
+          description: meeting.description || undefined,
+          location: meeting.location || undefined,
+          startTime: new Date(meeting.startTime),
+          endTime: new Date(meeting.endTime),
+          organizerEmail: meeting.organizer.email || undefined,
+        });
+
+        if (googleEventId) {
+          syncedCount++;
+        }
+      } catch (error) {
+        console.error(`Failed to sync meeting ${meeting.id} to calendar:`, error);
+        // Continue with other meetings
+      }
+    }
+
+    return syncedCount;
+  } catch (error) {
+    console.error("Error syncing accepted meetings:", error);
+    return 0;
+  }
+}

@@ -15,6 +15,7 @@ import {
   getTokensFromCode,
   getGoogleUserEmail,
   isCalendarConnected,
+  syncAcceptedMeetingsToCalendar,
 } from "../lib/google-calendar";
 
 const router = Router();
@@ -492,6 +493,15 @@ router.get("/google/callback", async (req: Request, res: Response) => {
         email: googleEmail || undefined,
       },
     });
+
+    // Sync all accepted upcoming meetings to user's calendar
+    try {
+      const syncedCount = await syncAcceptedMeetingsToCalendar(userId);
+      console.log(`Synced ${syncedCount} accepted meetings to user's calendar`);
+    } catch (syncError) {
+      console.error("Failed to sync accepted meetings:", syncError);
+      // Don't fail the OAuth flow if sync fails
+    }
 
     // Redirect back to meetings page with success
     res.redirect(`${frontendUrl}/dashboard/meetings?google_connected=true`);
