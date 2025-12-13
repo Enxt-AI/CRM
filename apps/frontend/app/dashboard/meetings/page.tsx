@@ -731,14 +731,19 @@ export default function MeetingsPage() {
                           Organizer: {meeting.organizer.fullName}
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteMeeting(meeting.id)}
-                        className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                      >
-                        🗑️
-                      </Button>
+                      
+                      {(currentUser?.id === meeting.organizerId ||
+                        currentUser?.role === "ADMIN" ||
+                        currentUser?.role === "MANAGER") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteMeeting(meeting.id)}
+                          className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                        >
+                          🗑️
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
