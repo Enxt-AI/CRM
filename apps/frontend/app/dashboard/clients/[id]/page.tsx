@@ -42,6 +42,8 @@ import {
   type TaskType,
 } from "@/lib/api";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
+import { EditClientDialog } from "@/components/edit-client-dialog";
 
 const DEAL_STAGE_LABELS: Record<DealStage, string> = {
   QUALIFICATION: "Qualification",
@@ -67,6 +69,7 @@ export default function ClientDetailPage() {
   const params = useParams();
   const router = useRouter();
   const clientId = params.id as string;
+  const { user } = useAuth();
 
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
@@ -558,6 +561,16 @@ export default function ClientDetailPage() {
         clientId={clientId}
         onSuccess={fetchClient}
       />
+      {user && (
+        <EditClientDialog
+          client={client}
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          onSuccess={fetchClient}
+          currentUserRole={user.role}
+          currentUserId={user.id}
+        />
+      )}
     </div>
   );
 }
