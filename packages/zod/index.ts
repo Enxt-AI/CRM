@@ -72,16 +72,6 @@ export const leadSourceEnum = z.enum([
   "OTHER",
 ]);
 
-export const leadStatusEnum = z.enum([
-  "NEW",
-  "ATTEMPTING_CONTACT",
-  "CONTACTED",
-  "QUALIFIED",
-  "NURTURING",
-  "DISQUALIFIED",
-  "CONVERTED",
-]);
-
 export const leadPipelineStageEnum = z.enum([
   "NEW",
   "CONTACTED",
@@ -103,7 +93,6 @@ export const createLeadSchema = z.object({
   source: leadSourceEnum.default("OTHER"),
   sourceDetails: z.string().max(500).optional().nullable(),
   pipelineStage: leadPipelineStageEnum.default("NEW"),
-  status: leadStatusEnum.default("NEW"),
   priority: priorityEnum.default("MEDIUM"),
   initialNotes: z.string().max(2000).optional().nullable(),
   nextFollowUpAt: z.string().optional().nullable(),
@@ -124,7 +113,6 @@ export const updateLeadSchema = z.object({
   source: leadSourceEnum.optional(),
   sourceDetails: z.string().max(500).optional().nullable(),
   pipelineStage: leadPipelineStageEnum.optional(),
-  status: leadStatusEnum.optional(),
   priority: priorityEnum.optional(),
   score: z.number().min(0).max(100).optional(),
   tags: z.array(z.string()).optional(),
@@ -150,7 +138,6 @@ export type CreateLeadInput = z.infer<typeof createLeadSchema>;
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
 export type ConvertLeadInput = z.infer<typeof convertLeadSchema>;
 export type LeadSource = z.infer<typeof leadSourceEnum>;
-export type LeadStatus = z.infer<typeof leadStatusEnum>;
 export type LeadPipelineStage = z.infer<typeof leadPipelineStageEnum>;
 export type Priority = z.infer<typeof priorityEnum>;
 export const clientStatusEnum = z.enum(["ACTIVE", "INACTIVE", "CHURNED", "PAUSED"]);

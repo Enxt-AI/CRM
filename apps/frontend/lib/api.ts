@@ -86,15 +86,6 @@ export type LeadSource =
   | "EMAIL_CAMPAIGN"
   | "OTHER";
 
-export type LeadStatus =
-  | "NEW"
-  | "ATTEMPTING_CONTACT"
-  | "CONTACTED"
-  | "QUALIFIED"
-  | "NURTURING"
-  | "DISQUALIFIED"
-  | "CONVERTED";
-
 export type LeadPipelineStage =
   | "NEW"
   | "CONTACTED"
@@ -113,7 +104,6 @@ export type Lead = {
   sourceDetails: string | null;
   initialNotes: string | null;
   pipelineStage: LeadPipelineStage;
-  status: LeadStatus;
   score: number;
   priority: Priority;
   tags: string[];
@@ -188,7 +178,6 @@ export type CreateLeadData = {
   source?: LeadSource;
   sourceDetails?: string | null;
   pipelineStage?: LeadPipelineStage;
-  status?: LeadStatus;
   priority?: Priority;
   initialNotes?: string | null;
   nextFollowUpAt?: string | null;

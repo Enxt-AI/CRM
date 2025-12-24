@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { leads, type CreateLeadData, type LeadSource, type Priority, type LeadStatus, type LeadPipelineStage } from "@/lib/api";
+import { leads, type CreateLeadData, type LeadSource, type Priority, type LeadPipelineStage } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { auth, type User } from "@/lib/api";
 import { toast } from "sonner";
@@ -41,14 +41,6 @@ const PRIORITIES: { value: Priority; label: string }[] = [
   { value: "MEDIUM", label: "Medium" },
   { value: "HIGH", label: "High" },
   { value: "URGENT", label: "Urgent" },
-];
-
-const STATUSES: { value: LeadStatus; label: string }[] = [
-  { value: "NEW", label: "New" },
-  { value: "ATTEMPTING_CONTACT", label: "Attempting Contact" },
-  { value: "CONTACTED", label: "Contacted" },
-  { value: "QUALIFIED", label: "Qualified" },
-  { value: "NURTURING", label: "Nurturing" },
 ];
 
 const PIPELINE_STAGES: { value: LeadPipelineStage; label: string }[] = [
@@ -89,7 +81,6 @@ export function AddLeadDialog({ onLeadAdded, children, open: externalOpen, onOpe
     source: "OTHER",
     sourceDetails: "",
     pipelineStage: "NEW",
-    status: "NEW",
     priority: "MEDIUM",
     initialNotes: "",
     nextFollowUpAt: "",
@@ -105,7 +96,6 @@ export function AddLeadDialog({ onLeadAdded, children, open: externalOpen, onOpe
       source: "OTHER",
       sourceDetails: "",
       pipelineStage: "NEW",
-      status: "NEW",
       priority: "MEDIUM",
       initialNotes: "",
       nextFollowUpAt: "",
@@ -263,28 +253,8 @@ export function AddLeadDialog({ onLeadAdded, children, open: externalOpen, onOpe
               </div>
             )}
 
-            {/* Status & Pipeline Stage - Two columns */}
+            {/* Pipeline Stage & Priority - Two columns */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Status</Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, status: value as LeadStatus })
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUSES.map((status) => (
-                      <SelectItem key={status.value} value={status.value}>
-                        {status.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="grid gap-2">
                 <Label>Pipeline Stage</Label>
                 <Select
@@ -305,10 +275,6 @@ export function AddLeadDialog({ onLeadAdded, children, open: externalOpen, onOpe
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            {/* Priority & Next Follow Up - Two columns */}
-            <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label>Priority</Label>
                 <Select
@@ -329,15 +295,17 @@ export function AddLeadDialog({ onLeadAdded, children, open: externalOpen, onOpe
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="nextFollowUpAt">Next Follow Up</Label>
-                <Input
-                  id="nextFollowUpAt"
-                  type="datetime-local"
-                  value={formData.nextFollowUpAt || ""}
-                  onChange={(e) => setFormData({ ...formData, nextFollowUpAt: e.target.value })}
-                />
-              </div>
+            </div>
+
+            {/* Next Follow Up */}
+            <div className="grid gap-2">
+              <Label htmlFor="nextFollowUpAt">Next Follow Up</Label>
+              <Input
+                id="nextFollowUpAt"
+                type="datetime-local"
+                value={formData.nextFollowUpAt || ""}
+                onChange={(e) => setFormData({ ...formData, nextFollowUpAt: e.target.value })}
+              />
             </div>
 
             {/* Source & Source Details */}

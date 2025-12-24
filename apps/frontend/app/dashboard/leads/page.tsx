@@ -53,16 +53,6 @@ const SOURCE_LABELS: Record<string, string> = {
   OTHER: "Other",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  NEW: "New",
-  ATTEMPTING_CONTACT: "Attempting",
-  CONTACTED: "Contacted",
-  QUALIFIED: "Qualified",
-  NURTURING: "Nurturing",
-  DISQUALIFIED: "Disqualified",
-  CONVERTED: "Converted",
-};
-
 export default function LeadsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -321,7 +311,6 @@ export default function LeadsPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Company</TableHead>
-                    <TableHead>Status</TableHead>
                     <TableHead>Stage</TableHead>
                     <TableHead>Priority</TableHead>
                     <TableHead>Owner</TableHead>
@@ -345,11 +334,6 @@ export default function LeadsPage() {
                       </TableCell>
                       <TableCell className="text-neutral-600">
                         {lead.companyName || "—"}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-neutral-600">
-                          {STATUS_LABELS[lead.status] || lead.status}
-                        </span>
                       </TableCell>
                       <TableCell>
                         <Badge className={`${getPipelineStageStyle(lead.pipelineStage)} border-0`}>

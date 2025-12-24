@@ -51,7 +51,6 @@ model Lead {
   source            LeadSource        @default(OTHER)
   sourceDetails     String?
   pipelineStage     LeadPipelineStage @default(NEW)
-  status            LeadStatus        @default(NEW)
   score             Int               @default(0)
   priority          Priority          @default(MEDIUM)
   tags              String[]
@@ -74,10 +73,8 @@ model Lead {
   tasks             Task[]
 
   @@index([ownerId, pipelineStage])
-  @@index([ownerId, status])
   @@index([ownerId, isConverted])
   @@index([email])
-  @@index([status])
   @@index([source])
   @@index([priority])
   @@index([nextFollowUpAt])
@@ -345,16 +342,6 @@ enum LeadSource {
   PARTNER
   EMAIL_CAMPAIGN
   OTHER
-}
-
-enum LeadStatus {
-  NEW
-  ATTEMPTING_CONTACT
-  CONTACTED
-  QUALIFIED
-  NURTURING
-  DISQUALIFIED
-  CONVERTED
 }
 
 enum LeadPipelineStage {
