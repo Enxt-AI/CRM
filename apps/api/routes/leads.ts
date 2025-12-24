@@ -62,14 +62,9 @@ router.get("/stats", authenticate, async (req: Request, res: Response) => {
     const baseWhere = role === "EMPLOYEE" ? { ownerId: userId } : {};
     const activeWhere = { ...baseWhere, isConverted: false };
 
-    const [total, converted, byStatus, bySource, byPriority, byStage] = await Promise.all([
+    const [total, converted, bySource, byPriority, byStage] = await Promise.all([
       prisma.lead.count({ where: activeWhere }),
       prisma.lead.count({ where: { ...baseWhere, isConverted: true } }),
-      prisma.lead.groupBy({
-        by: ["status"],
-        where: activeWhere,
-        _count: true,
-      }),
       prisma.lead.groupBy({
         by: ["source"],
         where: activeWhere,
@@ -90,7 +85,6 @@ router.get("/stats", authenticate, async (req: Request, res: Response) => {
     res.json({
       total,
       converted,
-      byStatus: byStatus.reduce((acc, item) => ({ ...acc, [item.status]: item._count }), {}),
       bySource: bySource.reduce((acc, item) => ({ ...acc, [item.source]: item._count }), {}),
       byPriority: byPriority.reduce((acc, item) => ({ ...acc, [item.priority]: item._count }), {}),
       byStage: byStage.reduce((acc, item) => ({ ...acc, [item.pipelineStage]: item._count }), {}),
@@ -181,7 +175,6 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
         source: data.source,
         sourceDetails: data.sourceDetails || null,
         pipelineStage: data.pipelineStage || "NEW",
-        status: data.status || "NEW",
         priority: data.priority,
         initialNotes: data.initialNotes || null,
         nextFollowUpAt: data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : null,
@@ -251,7 +244,6 @@ router.patch("/:id", authenticate, async (req: Request, res: Response) => {
         ...(data.source && { source: data.source }),
         ...(data.sourceDetails !== undefined && { sourceDetails: data.sourceDetails }),
         ...(data.pipelineStage && { pipelineStage: data.pipelineStage }),
-        ...(data.status && { status: data.status }),
         ...(data.priority && { priority: data.priority }),
         ...(data.score !== undefined && { score: data.score }),
         ...(data.tags && { tags: data.tags }),

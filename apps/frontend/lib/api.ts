@@ -33,32 +33,54 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     config.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-  
-  // Handle non-JSON responses (like HTML error pages)
-  const contentType = response.headers.get("content-type");
-  const isJson = contentType && contentType.includes("application/json");
-  
-  if (!isJson) {
-    if (!response.ok) {
-      throw new ApiError(response.status, `Server error: ${response.statusText}`);
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    
+    // Handle non-JSON responses (like HTML error pages)
+    const contentType = response.headers.get("content-type");
+    const isJson = contentType && contentType.includes("application/json");
+    
+    if (!isJson) {
+      if (!response.ok) {
+        console.error(`[API Error] ${method} ${endpoint} - ${response.status} ${response.statusText}`);
+        throw new ApiError(response.status, `Server error: ${response.statusText}`);
+      }
+      // If it's a successful non-JSON response, return empty object
+      return {} as T;
     }
-    // If it's a successful non-JSON response, return empty object
-    return {} as T;
-  }
-  
-  const data = await response.json();
+    
+    const data = await response.json();
 
-  // Check for errors in JSON responses
-  if (!response.ok) {
+    // Check for errors in JSON responses
+    if (!response.ok) {
+      console.error(`[API Error] ${method} ${endpoint}:`, {
+        status: response.status,
+        error: data.error || response.statusText,
+        details: data.details,
+        endpoint,
+        method,
+      });
+      
+      throw new ApiError(
+        response.status,
+        data.error || response.statusText,
+        data.details
+      );
+    }
+
+    return data as T;
+  } catch (error) {
+    // Log fetch errors (network issues, etc)
+    if (error instanceof ApiError) {
+      throw error; // Re-throw ApiError as-is
+    }
+    
+    console.error(`[Network Error] ${method} ${endpoint}:`, error);
     throw new ApiError(
-      response.status,
-      data.error || response.statusText,
-      data.details
+      0,
+      error instanceof Error ? error.message : "Network request failed"
     );
   }
-
-  return data as T;
 }
 
 // Auth types
