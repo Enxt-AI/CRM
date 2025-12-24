@@ -49,6 +49,14 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   
   const data = await response.json();
 
+  // Check for errors in JSON responses
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      data.error || response.statusText,
+      data.details
+    );
+  }
 
   return data as T;
 }
