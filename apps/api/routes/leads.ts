@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import prisma from "@db/client";
 import { authenticate } from "../middleware/auth";
-import { createLeadSchema, updateLeadSchema, convertLeadSchema } from "@repo/zod";
+import { createLeadSchema, updateLeadSchema, convertLeadSchema, addNoteSchema } from "@repo/zod";
 
 const router = Router();
 
@@ -23,6 +23,19 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
             id: true,
             fullName: true,
             username: true,
+          },
+        },
+        notes: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                fullName: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
           },
         },
       },
@@ -109,6 +122,19 @@ router.get("/:id", authenticate, async (req: Request, res: Response) => {
             id: true,
             fullName: true,
             username: true,
+          },
+        },
+        notes: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                fullName: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
           },
         },
       },
@@ -367,7 +393,6 @@ router.post("/:id/convert", authenticate, async (req: Request, res: Response) =>
           isConverted: true,
           convertedAt: new Date(),
           convertedClientId: client.id,
-          status: "CONVERTED",
           estimatedValue: estimatedValue,
         },
         include: {
@@ -391,6 +416,57 @@ router.post("/:id/convert", authenticate, async (req: Request, res: Response) =>
     });
   } catch (error) {
     console.error("Convert lead error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /leads/:id/notes - Add note to lead
+router.post("/:id/notes", authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.user!;
+
+    const validation = addNoteSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        error: "Validation failed",
+        details: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    const data = validation.data;
+
+    // Check if lead exists
+    const lead = await prisma.lead.findUnique({ where: { id } });
+    if (!lead) {
+      return res.status(404).json({ error: "Lead not found" });
+    }
+
+    // Create note
+    const note = await prisma.note.create({
+      data: {
+        content: data.content,
+        isPinned: data.isPinned || false,
+        leadId: id,
+        authorId: userId,
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            fullName: true,
+            username: true,
+          },
+        },
+      },
+    });
+
+    res.status(201).json({
+      message: "Note added successfully",
+      note,
+    });
+  } catch (error) {
+    console.error("Add lead note error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });

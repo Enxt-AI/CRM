@@ -135,6 +135,7 @@ export type Lead = {
     fullName: string;
     username: string;
   };
+  notes: Note[];
   isConverted: boolean;
   convertedAt: string | null;
   estimatedValue: number | null;
@@ -473,6 +474,12 @@ export const leads = {
 
   convert: (id: string, data: ConvertLeadData) =>
     request<{ message: string; lead: Lead; client: Client }>(`/leads/${id}/convert`, {
+      method: "POST",
+      body: data,
+    }),
+
+  addNote: (id: string, data: AddNoteData) =>
+    request<{ message: string; note: Note }>(`/leads/${id}/notes`, {
       method: "POST",
       body: data,
     }),

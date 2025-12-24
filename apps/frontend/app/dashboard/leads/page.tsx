@@ -23,8 +23,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { AddLeadDialog } from "@/components/add-lead-dialog";
-import { leads as leadsApi, type Lead, type LeadPipelineStage, type Priority } from "@/lib/api";
+import { leads as leadsApi, type Lead, type LeadPipelineStage, type Priority, type Note } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 
@@ -68,8 +69,12 @@ export default function LeadsPage() {
   const [converting, setConverting] = useState(false);
   const [draggedLead, setDraggedLead] = useState<Lead | null>(null);
   const [notesDialogOpen, setNotesDialogOpen] = useState(false);
-  const [selectedNotes, setSelectedNotes] = useState<{ name: string; notes: string | null } | null>(null);
+  const [selectedNotes, setSelectedNotes] = useState<{ name: string; notes: Note[] } | null>(null);
   const [addLeadDialogOpen, setAddLeadDialogOpen] = useState(searchParams?.get("openDialog") === "true");
+  const [stageChangeDialogOpen, setStageChangeDialogOpen] = useState(false);
+  const [pendingStageChange, setPendingStageChange] = useState<{ lead: Lead; newStage: LeadPipelineStage } | null>(null);
+  const [stageChangeNote, setStageChangeNote] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const fetchLeads = useCallback(async () => {
     try {
@@ -157,21 +162,67 @@ export default function LeadsPage() {
       return;
     }
 
+    // Show note dialog before updating stage
+    setPendingStageChange({ lead: draggedLead, newStage: stage });
+    setStageChangeDialogOpen(true);
+    setDraggedLead(null);
+  };
+
+  const handleStageChangeWithNote = async () => {
+    if (!pendingStageChange || isUpdating) return;
+
+    setIsUpdating(true);
     try {
-      await leadsApi.update(draggedLead.id, { pipelineStage: stage });
-      toast.success(`Lead moved to ${getPipelineStageLabel(stage)}`);
+      // Update pipeline stage
+      await leadsApi.update(pendingStageChange.lead.id, { pipelineStage: pendingStageChange.newStage });
+      
+      // Add note if provided
+      if (stageChangeNote.trim()) {
+        await leadsApi.addNote(pendingStageChange.lead.id, {
+          content: `Stage changed to ${getPipelineStageLabel(pendingStageChange.newStage)}: ${stageChangeNote}`,
+          isPinned: false,
+        });
+      }
+      
+      toast.success(`Lead moved to ${getPipelineStageLabel(pendingStageChange.newStage)}`);
+      
+      // Close dialog immediately
+      setStageChangeDialogOpen(false);
+      setStageChangeNote("");
+      setPendingStageChange(null);
+      
+      // Fetch updated data
       fetchLeads();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update lead");
     } finally {
-      setDraggedLead(null);
+      setIsUpdating(false);
     }
   };
 
   const handleNotesClick = (lead: Lead) => {
+    // Combine initialNotes and notes array
+    const allNotes = [...lead.notes];
+    
+    // Add initialNotes as the first/oldest note if it exists
+    if (lead.initialNotes) {
+      allNotes.push({
+        id: 'initial-note',
+        content: lead.initialNotes,
+        isPinned: false,
+        authorId: lead.ownerId,
+        author: {
+          id: lead.owner.id,
+          fullName: lead.owner.fullName,
+        },
+        createdAt: lead.createdAt,
+        updatedAt: lead.createdAt,
+      });
+    }
+    
     setSelectedNotes({
       name: lead.name,
-      notes: lead.initialNotes,
+      notes: allNotes,
     });
     setNotesDialogOpen(true);
   };
@@ -367,7 +418,9 @@ export default function LeadsPage() {
                           onClick={() => handleNotesClick(lead)}
                           className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline max-w-[150px] truncate block text-left"
                         >
-                          {lead.initialNotes ? "View Notes" : "—"}
+                          {(lead.notes && lead.notes.length > 0) || lead.initialNotes 
+                            ? `View Notes (${lead.notes.length + (lead.initialNotes ? 1 : 0)})` 
+                            : "—"}
                         </button>
                       </TableCell>
                       <TableCell>
@@ -502,9 +555,63 @@ export default function LeadsPage() {
       {/* Add Lead Dialog - Manual control based on query param */}
       <AddLeadDialog open={addLeadDialogOpen} onOpenChange={setAddLeadDialogOpen} onLeadAdded={fetchLeads} />
 
+      {/* Stage Change Note Dialog */}
+      <Dialog open={stageChangeDialogOpen} onOpenChange={(open) => {
+        setStageChangeDialogOpen(open);
+        if (!open) {
+          setStageChangeNote("");
+          setPendingStageChange(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Moving Lead Stage</DialogTitle>
+            <DialogDescription>
+              {pendingStageChange && (
+                <>
+                  Moving <strong>{pendingStageChange.lead.name}</strong> to{" "}
+                  <strong>{getPipelineStageLabel(pendingStageChange.newStage)}</strong>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="stageNote">
+                Add a note (optional)
+                <span className="text-xs text-neutral-500 ml-2">Explain why you're moving this lead</span>
+              </Label>
+              <Textarea
+                id="stageNote"
+                value={stageChangeNote}
+                onChange={(e) => setStageChangeNote(e.target.value)}
+                placeholder="e.g., Had a great call, ready to send proposal..."
+                rows={4}
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setStageChangeDialogOpen(false);
+                setStageChangeNote("");
+                setPendingStageChange(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleStageChangeWithNote} disabled={isUpdating}>
+              {isUpdating ? "Moving..." : `Move to ${pendingStageChange && getPipelineStageLabel(pendingStageChange.newStage)}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* View Notes Dialog */}
       <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Lead Notes</DialogTitle>
             <DialogDescription>
@@ -512,10 +619,44 @@ export default function LeadsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 max-h-[300px] overflow-y-auto">
-              <p className="text-sm text-neutral-700 whitespace-pre-wrap">
-                {selectedNotes?.notes || "No notes available"}
-              </p>
+            <div className="max-h-[400px] overflow-y-auto space-y-3">
+              {selectedNotes?.notes && selectedNotes.notes.length > 0 ? (
+                selectedNotes.notes.map((note) => (
+                  <div 
+                    key={note.id}
+                    className="p-4 rounded-lg bg-neutral-50 border border-neutral-200"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-neutral-900">
+                          {note.author.fullName}
+                        </span>
+                        {note.isPinned && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                            Pinned
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-neutral-500">
+                        {new Date(note.createdAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                    <p className="text-sm text-neutral-700 whitespace-pre-wrap">
+                      {note.content}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 text-center">
+                  <p className="text-sm text-neutral-500">No notes available</p>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
