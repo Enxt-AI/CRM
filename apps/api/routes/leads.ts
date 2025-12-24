@@ -13,7 +13,9 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
 
     // Build where clause based on role
     // Admin sees all, Manager sees all, Employee sees only their own
-    const where = role === "EMPLOYEE" ? { ownerId: userId, isConverted: false } : { isConverted: false };
+    const where = role === "EMPLOYEE" 
+      ? { ownerId: userId, isConverted: false, isArchived: false } 
+      : { isConverted: false, isArchived: false };
 
     const leads = await prisma.lead.findMany({
       where,
@@ -64,6 +66,38 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("List leads error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /leads/archived - List archived leads (Admin only)
+router.get("/archived", authenticate, async (req: Request, res: Response) => {
+  try {
+    const { role } = req.user!;
+
+    // Only admins can view archived leads
+    if (role !== "ADMIN") {
+      res.status(403).json({ error: "Only admins can view archived leads" });
+      return;
+    }
+
+    const archivedLeads = await prisma.lead.findMany({
+      where: { isArchived: true },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            fullName: true,
+            username: true,
+          },
+        },
+      },
+      orderBy: { archivedAt: "desc" },
+    });
+
+    res.json({ leads: archivedLeads, total: archivedLeads.length });
+  } catch (error) {
+    console.error("List archived leads error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -315,19 +349,65 @@ router.delete("/:id", authenticate, async (req: Request, res: Response) => {
       return;
     }
 
-    // Only admin can delete, or owner if they're manager+
+    // Only admin can archive, or owner if they're manager+
     if (role === "EMPLOYEE") {
-      res.status(403).json({ error: "Only admins and managers can delete leads" });
+      res.status(403).json({ error: "Only admins and managers can archive leads" });
       return;
     }
 
-    await prisma.lead.delete({
+    // Archive instead of delete to maintain history
+    await prisma.lead.update({
+      where: { id },
+      data: {
+        isArchived: true,
+        archivedAt: new Date(),
+      },
+    });
+
+    res.json({ message: "Lead archived successfully" });
+  } catch (error) {
+    console.error("Archive lead error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /leads/:id/unarchive - Unarchive a lead (Admin only)
+router.patch("/:id/unarchive", authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.user!;
+
+    // Only admins can unarchive leads
+    if (role !== "ADMIN") {
+      res.status(403).json({ error: "Only admins can unarchive leads" });
+      return;
+    }
+
+    const lead = await prisma.lead.findUnique({
       where: { id },
     });
 
-    res.json({ message: "Lead deleted successfully" });
+    if (!lead) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+
+    if (!lead.isArchived) {
+      res.status(400).json({ error: "Lead is not archived" });
+      return;
+    }
+
+    await prisma.lead.update({
+      where: { id },
+      data: {
+        isArchived: false,
+        archivedAt: null,
+      },
+    });
+
+    res.json({ message: "Lead unarchived successfully" });
   } catch (error) {
-    console.error("Delete lead error:", error);
+    console.error("Unarchive lead error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });

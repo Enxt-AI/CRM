@@ -137,7 +137,9 @@ export type Lead = {
   };
   notes: Note[];
   isConverted: boolean;
+  isArchived: boolean;
   convertedAt: string | null;
+  archivedAt: string | null;
   estimatedValue: number | null;
   lastContactedAt: string | null;
   nextFollowUpAt: string | null;
@@ -482,6 +484,19 @@ export const leads = {
     request<{ message: string; note: Note }>(`/leads/${id}/notes`, {
       method: "POST",
       body: data,
+    }),
+
+  archive: (id: string) =>
+    request<{ message: string }>(`/leads/${id}`, {
+      method: "DELETE",
+    }),
+
+  getArchived: () =>
+    request<{ leads: Lead[]; total: number }>("/leads/archived"),
+
+  unarchive: (id: string) =>
+    request<{ message: string }>(`/leads/${id}/unarchive`, {
+      method: "PATCH",
     }),
 };
 

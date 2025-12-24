@@ -75,6 +75,9 @@ export default function LeadsPage() {
   const [pendingStageChange, setPendingStageChange] = useState<{ lead: Lead; newStage: LeadPipelineStage } | null>(null);
   const [stageChangeNote, setStageChangeNote] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [archivedDialogOpen, setArchivedDialogOpen] = useState(false);
+  const [archivedLeads, setArchivedLeads] = useState<Lead[]>([]);
+  const [loadingArchived, setLoadingArchived] = useState(false);
 
   const fetchLeads = useCallback(async () => {
     try {
@@ -227,6 +230,45 @@ export default function LeadsPage() {
     setNotesDialogOpen(true);
   };
 
+  const handleArchive = async (lead: Lead) => {
+    if (!confirm(`Are you sure you want to archive "${lead.name}"? This will remove it from the active leads list.`)) {
+      return;
+    }
+
+    try {
+      await leadsApi.archive(lead.id);
+      toast.success("Lead archived successfully");
+      fetchLeads();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to archive lead");
+    }
+  };
+
+  const fetchArchivedLeads = async () => {
+    setLoadingArchived(true);
+    try {
+      const data = await leadsApi.getArchived();
+      setArchivedLeads(data.leads);
+      setArchivedDialogOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to fetch archived leads");
+    } finally {
+      setLoadingArchived(false);
+    }
+  };
+
+  const handleUnarchive = async (lead: Lead) => {
+    try {
+      await leadsApi.unarchive(lead.id);
+      toast.success("Lead restored successfully");
+      // Refresh both lists
+      fetchLeads();
+      fetchArchivedLeads();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to restore lead");
+    }
+  };
+
   const getLeadsByStage = (stage: LeadPipelineStage) => {
     return leadsList.filter((lead) => lead.pipelineStage === stage);
   };
@@ -249,6 +291,17 @@ export default function LeadsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Archived Leads Button (Admin Only) */}
+          {user?.role === "ADMIN" && (
+            <Button
+              variant="outline"
+              onClick={fetchArchivedLeads}
+              disabled={loadingArchived}
+              className="text-neutral-600 border-neutral-300"
+            >
+              {loadingArchived ? "Loading..." : "Archived Leads"}
+            </Button>
+          )}
           {/* View Toggle */}
           <div className="flex items-center rounded-lg border border-neutral-200 p-1">
             <button
@@ -424,14 +477,26 @@ export default function LeadsPage() {
                         </button>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleConvertClick(lead)}
-                          className="text-green-600 border-green-200 hover:bg-green-50"
-                        >
-                          Convert
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleConvertClick(lead)}
+                            className="text-green-600 border-green-200 hover:bg-green-50"
+                          >
+                            Convert
+                          </Button>
+                          {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleArchive(lead)}
+                              className="text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                              Archive
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -661,6 +726,74 @@ export default function LeadsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNotesDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Archived Leads Dialog (Admin Only) */}
+      <Dialog open={archivedDialogOpen} onOpenChange={setArchivedDialogOpen}>
+        <DialogContent className="sm:max-w-[900px]">
+          <DialogHeader>
+            <DialogTitle>Archived Leads</DialogTitle>
+            <DialogDescription>
+              View and restore archived leads
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            {archivedLeads.length === 0 ? (
+              <div className="p-8 text-center text-neutral-500">
+                No archived leads found
+              </div>
+            ) : (
+              <div className="max-h-[500px] overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Company</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Owner</TableHead>
+                      <TableHead>Archived Date</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {archivedLeads.map((lead) => (
+                      <TableRow key={lead.id}>
+                        <TableCell className="font-medium">{lead.name}</TableCell>
+                        <TableCell>{lead.companyName || "—"}</TableCell>
+                        <TableCell>{lead.email || "—"}</TableCell>
+                        <TableCell>{lead.owner.fullName}</TableCell>
+                        <TableCell className="text-sm text-neutral-500">
+                          {lead.archivedAt 
+                            ? new Date(lead.archivedAt).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                              })
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleUnarchive(lead)}
+                            className="text-green-600 border-green-200 hover:bg-green-50"
+                          >
+                            Restore
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setArchivedDialogOpen(false)}>
               Close
             </Button>
           </DialogFooter>
