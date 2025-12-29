@@ -15,7 +15,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: "http://localhost:3000", // Next.js frontend
+  origin: ["http://localhost:3000","https://enxt-crm.vercel.app"], // Next.js frontend
   credentials: true, // Allow cookies
 }));
 app.use(express.json());
@@ -37,7 +37,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+const PORT = parseInt(process.env.PORT || "3001", 10);
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`API server running on http://localhost:${PORT}`);
 });
